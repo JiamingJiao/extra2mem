@@ -8,56 +8,54 @@ import shutil
 import math
 import random
 
-def npyToPng(srcPath, dstPath):
-    npy = loadData(srcPath)
-    min = np.amin(npy)
-    max = np.amax(npy)
-    npy = 255*(npy-min)/(max-min)
-    for i in range(0, npy.shape[0]):
-        cv.imwrite(dstPath + "%06d"%i+".png", npy[i, :, :])
-    print('completed')
+DATA_TYPE = np.float64
 
-def loadData(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0, normalizationRange = [0., 1.],
-approximateData = True):
-    fileName = sorted(glob.glob(srcPath + '*.npy'))
+def npyToPng(srcDir, dstDir):
+    src = loadData(srcDir = srcDir, normalization = True, normalizationRange = (0, 255))
+    for i in range(0, src.shape[0]):
+        cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
+    print('convert .npy to .png completed')
+
+def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), normalization=False, normalizationRange=(0, 1), approximateData=False):
+    srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     lowerBound = normalizationRange[0]
     upperBound = normalizationRange[1]
-    if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
-    else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
+    if resize == False:
+        dstSize = srcSize
+    dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype = DATA_TYPE)
+    src = np.ndarray(srcSize, dtype = DATA_TYPE)
     index = 0
-    for i in fileName:
-        rawImg = np.load(i)
-        if resize == 1:
-            mergeImg[index] = cv.resize(rawImg, (imgRows, imgCols), mergeImg[index], 0, 0, cv.INTER_NEAREST)
+    for srcPath in srcPathList:
+        src = np.load(srcPath)
+        if resize == True:
+            dst[index] = cv.resize(src, dstSize, dst[index], 0, 0, cv.INTER_NEAREST)
         else:
-            mergeImg[index] = rawImg
+            dst[index] = src
         index += 1
     if approximateData == True:
-        min = np.amin(mergeImg)
-        max = np.amax(mergeImg)
-        mergeImg = 255*(mergeImg-min)/(max-min)
-        mergeImg = np.around(mergeImg)
-        normalization = 1
-    if normalization == 1:
-        min = np.amin(mergeImg)
-        max = np.amax(mergeImg)
-        mergeImg = lowerBound + ((mergeImg-min)*(upperBound-lowerBound))/(max-min)
-    return mergeImg
+        min = np.amin(dst)
+        max = np.amax(dst)
+        dst = 255*(dst-min)/(max-min)
+        dst = np.around(dst)
+        normalization = True
+    if normalization == True:
+        min = np.amin(dst)
+        max = np.amax(dst)
+        dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
+    return dst
 
-def generatePseudoECG(srcPath, dstPath):
-    src = loadData(srcPath = srcPath)
-    dst = np.ndarray(src.shape, dtype = np.float64)
-    diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
+def calcPSeudoEcg
+
+def generatePseudoECG(srcDir, dstDir):
+    src = loadData(srcDir = srcDir)
+    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
+    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
     diffVKernel[1, :, 0] = 1
     diffVKernel[:, 1, 0] = 1
     diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
-    distance = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
-    pseudoECG = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
+    diffV = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
+    distance = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
+    pseudoECG = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
     firstRowIndex = np.linspace(0, src.shape[1], num = src.shape[1], endpoint = False)
     firstColIndex = np.linspace(0, src.shape[2], num = src.shape[2], endpoint = False)
     colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
@@ -76,9 +74,9 @@ def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
     multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    temp = np.ndarray(multipleOfStride, dtype = np.float64) #Its size is a multiple of stride + 1
-    sample = np.ndarray(samplePoints, dtype = np.float64)
-    interpolated = np.ndarray(interpolationSize, dtype = np.float64)
+    temp = np.ndarray(multipleOfStride, dtype = DATA_TYPE) #Its size is a multiple of stride + 1
+    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
+    interpolated = np.ndarray(interpolationSize, dtype = DATA_TYPE)
     for i in range(0, src.shape[0]):
         temp = cv.resize(src[i, :, :], multipleOfStride)
         for j in range(0, samplePoints[0]):
@@ -94,19 +92,19 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
     rowStride = math.floor(src.shape[1]/samplePoints[0])
     colStride = math.floor(src.shape[2]/samplePoints[1])
     multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    temp = np.ndarray(multipleOfStride, dtype = np.float64) #Its size is a multiple of stride
-    sample = np.ndarray(samplePoints, dtype = np.float64)
-    diffVKernel = np.zeros((3, 3, 1), dtype = np.float64)
+    temp = np.ndarray(multipleOfStride, dtype = DATA_TYPE) #Its size is a multiple of stride
+    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
+    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
     diffVKernel[1, :, 0] = 1
     diffVKernel[:, 1, 0] = 1
     diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray(multipleOfStride, dtype = np.float64)
+    diffV = np.ndarray(multipleOfStride, dtype = DATA_TYPE)
     firstRowIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
     firstColIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
     colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-    distance = np.ndarray(multipleOfStride, dtype = np.float64)
-    pseudoECG = np.ndarray(samplePoints, dtype = np.float64)
-    interpolated = np.ndarray((src.shape[1], src.shape[2]), dtype = np.float64)
+    distance = np.ndarray(multipleOfStride, dtype = DATA_TYPE)
+    pseudoECG = np.ndarray(samplePoints, dtype = DATA_TYPE)
+    interpolated = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
     for i in range(0, src.shape[0]):
         #diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
         temp = cv.resize(src[i, :, :], multipleOfStride, temp, 0, 0, cv.INTER_CUBIC)
@@ -121,11 +119,11 @@ def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
 def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
     fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = DATA_TYPE)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = np.float64)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = np.float64)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = np.float64)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = DATA_TYPE)
+        tempImg = np.ndarray((imgRows, imgCols), dtype = DATA_TYPE)
+    rawImg = np.ndarray((rawRows, rawCols), dtype = DATA_TYPE)
     for i in range(0, len(fileName)):
         localName = srcPath + '%06d'%i + ".png"
         rawImg = cv.imread(localName, -1)
@@ -142,7 +140,7 @@ def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, 
 def create3DData(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = np.float64)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = DATA_TYPE)
     for i in range(0, paddingDepth):
         dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
         dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
