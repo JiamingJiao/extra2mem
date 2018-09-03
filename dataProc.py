@@ -44,8 +44,32 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
     return dst
 
-def calcPSeudoEcg
+def calcPseudoEcg(src, dst): # src: extra cellular potential map, dst: pseudo-ECG map
+    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
+    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
+    diffVKernel[1, :, 0] = 1
+    diffVKernel[:, 1, 0] = 1
+    diffVKernel[1, 1, 0] = -4
+    diffV = np.ndarray(src.shape, dtype = DATA_TYPE)
+    diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
+    distance = np.ndarray(src.shape, dtype = DATA_TYPE)
+    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
+    firstRowIndex = np.linspace(0, src.shape[0], num = src.shape[1], endpoint = False)
+    firstColIndex = np.linspace(0, src.shape[1], num = src.shape[1], endpoint = False)
+    colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+    for row in range(0, src.shape[0]):
+        for col in range(0, src.shape[1]):
+            distance = cv.magnitude((rowIndex-row), (colIndex-col))
+            dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
+    return dst
 
+def downSample(src, dst, samplePoints = (20, 20)):
+    rowStride = math.floor(src.shape[0]/samplePoints[0])
+    colStride = math.floor(src.shape[1]/samplePoints[1])
+    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+
+
+'''
 def generatePseudoECG(srcDir, dstDir):
     src = loadData(srcDir = srcDir)
     dst = np.ndarray(src.shape, dtype = DATA_TYPE)
@@ -68,6 +92,7 @@ def generatePseudoECG(srcDir, dstDir):
         dstFileName = dstPath + '%06d'%i
         np.save(dstFileName, pseudoECG)
     print('completed')
+'''
 
 def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
     src = loadData(srcPath, approximateData = False)
