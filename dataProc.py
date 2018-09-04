@@ -63,12 +63,6 @@ def calcPseudoEcg(src, dst): # src: extra cellular potential map, dst: pseudo-EC
             dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
     return dst
 
-def downSample(src, dst, samplePoints = (20, 20)):
-    rowStride = math.floor(src.shape[0]/samplePoints[0])
-    colStride = math.floor(src.shape[1]/samplePoints[1])
-    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-
-
 '''
 def generatePseudoECG(srcDir, dstDir):
     src = loadData(srcDir = srcDir)
@@ -93,6 +87,18 @@ def generatePseudoECG(srcDir, dstDir):
         np.save(dstFileName, pseudoECG)
     print('completed')
 '''
+
+def downSample(src, dst, samplePoints = (20, 20)):
+    rowStride = math.floor(src.shape[0]/samplePoints[0])
+    colStride = math.floor(src.shape[1]/samplePoints[1])
+    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+    resized = cv.resize(src, multipleOfStride)
+    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
+    for row in range(0, samplePoints[0]):
+        for col in range(0, samplePoints[1]):
+            sample[row, col] = resized[row*rowStride, col*colStride]
+    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
+    dst = cv.resize(sample, src.shape, dst, 0, 0, cv.INTER_NEAREST)
 
 def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
     src = loadData(srcPath, approximateData = False)
