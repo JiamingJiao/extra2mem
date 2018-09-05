@@ -4,14 +4,92 @@
 import numpy as np
 import cv2 as cv
 import glob
+import os
 import shutil
 import math
 import random
 
 DATA_TYPE = np.float64
+INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
+
+class calculation(object):
+    def __init__(self, dst=None, shape=None):
+        self.dst = dst
+        if not type(self.dst) is np.ndarray:
+            self.dst = np.ndarray(shape, dtype=DATA_TYPE)
+
+    def calcPseudoEcg(self, src): # src: extra cellular potential map, dst: pseudo-ECG map
+        diffVKernel = np.zeros((3, 3, 1), dtype=DATA_TYPE)
+        diffVKernel[1, :, 0] = 1
+        diffVKernel[:, 1, 0] = 1
+        diffVKernel[1, 1, 0] = -4
+        diffV = np.ndarray(src.shape, dtype=DATA_TYPE)
+        diffV = cv.filter2D(src=src, ddepth =-1, kernel=diffVKernel, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        distance = np.ndarray(src.shape, dtype=DATA_TYPE)
+        firstRowIndex = np.linspace(0, src.shape[0], num=src.shape[1], endpoint=False)
+        firstColIndex = np.linspace(0, src.shape[1], num=src.shape[1], endpoint=False)
+        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+        for row in range(0, src.shape[0]):
+            for col in range(0, src.shape[1]):
+                distance = cv.magnitude((rowIndex-row), (colIndex-col))
+                self.dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
+        return self.dst
+
+    def downSample(self, src, samplePoints=(20, 20)):
+        rowStride = math.floor(src.shape[0]/samplePoints[0])
+        colStride = math.floor(src.shape[1]/samplePoints[1])
+        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+        resized = cv.resize(src, multipleOfStride)
+        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
+        for row in range(0, samplePoints[0]):
+            for col in range(0, samplePoints[1]):
+                sample[row, col] = resized[row*rowStride, col*colStride]
+        self.dst = cv.resize(sample, src.shape, self.dst, 0, 0, INTERPOLATION_METHOD)
+        return self.dst
+
+    def calcSparsePseudoEcg(self, src, samplePoints = (20, 20)):
+        rowStride = math.floor(src.shape[0]/samplePoints[0])
+        colStride = math.floor(src.shape[1]/samplePoints[1])
+        multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
+        resized = np.ndarray(multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
+        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
+        diffVKernel = np.zeros((3, 3, 1), dtype=DATA_TYPE)
+        diffVKernel[1, :, 0] = 1
+        diffVKernel[:, 1, 0] = 1
+        diffVKernel[1, 1, 0] = -4
+        diffV = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
+        firstRowIndex = np.linspace(0, resized.shape[0], num=resized.shape[0], endpoint=False)
+        firstColIndex = np.linspace(0, resized.shape[1], num=resized.shape[1], endpoint=False)
+        colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
+        distance = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
+        pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
+        resized = cv.resize(src, multipleOfStride, resized, 0, 0, cv.INTER_CUBIC)
+        diffV = cv.filter2D(src=resized, ddepth=-1, kernel=diffVKernel, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        for row in range(0, samplePoints[0]):
+            for col in range(0, samplePoints[1]):
+                distance = cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride))
+                pseudoEcg[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
+        self.dst = cv.resize(pseudoEcg, (src.shape[0], src.shape[1]), self.dst, 0, 0, INTERPOLATION_METHOD)
+        return self.dst
+
+    def clipData(self, src, bounds=(0, 1)):
+        self.dst = np.clip(src, bounds[0], bounds[1])
+        return self.dst
+
+def callCalc(srcDir, dstDir, methodName, **kwargs):
+    if not os.path.exists(dstDir):
+        os.makedirs(dstDir)
+    src = loadData(srcDir)
+    dst = np.ndarray(src[0].shape, dtype=DATA_TYPE)
+    calc = calculation(dst=dst)
+    method = getattr(calc, methodName)
+    for i in range(0, src.shape[0]):
+        dst = method(src=src[i], **kwargs)
+        np.save(dstDir + '%06d'%i, dst)
+    print('%s completed'%methodName)
 
 def npyToPng(srcDir, dstDir):
-    src = loadData(srcDir = srcDir, normalization = True, normalizationRange = (0, 255))
+    src = loadData(srcDir=srcDir, normalization=True, normalizationRange=(0, 255))
     for i in range(0, src.shape[0]):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
@@ -22,13 +100,13 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
     upperBound = normalizationRange[1]
     if resize == False:
         dstSize = srcSize
-    dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype = DATA_TYPE)
-    src = np.ndarray(srcSize, dtype = DATA_TYPE)
+    dst = np.ndarray((len(srcPathList), dstSize[0], dstSize[1]), dtype=DATA_TYPE)
+    src = np.ndarray(srcSize, dtype=DATA_TYPE)
     index = 0
     for srcPath in srcPathList:
         src = np.load(srcPath)
         if resize == True:
-            dst[index] = cv.resize(src, dstSize, dst[index], 0, 0, cv.INTER_NEAREST)
+            dst[index] = cv.resize(src, dstSize, dst[index], 0, 0, INTERPOLATION_METHOD)
         else:
             dst[index] = src
         index += 1
@@ -44,117 +122,14 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
     return dst
 
-def calcPseudoEcg(src, dst): # src: extra cellular potential map, dst: pseudo-ECG map
-    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
-    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
-    diffVKernel[1, :, 0] = 1
-    diffVKernel[:, 1, 0] = 1
-    diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray(src.shape, dtype = DATA_TYPE)
-    diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
-    distance = np.ndarray(src.shape, dtype = DATA_TYPE)
-    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
-    firstRowIndex = np.linspace(0, src.shape[0], num = src.shape[1], endpoint = False)
-    firstColIndex = np.linspace(0, src.shape[1], num = src.shape[1], endpoint = False)
-    colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-    for row in range(0, src.shape[0]):
-        for col in range(0, src.shape[1]):
-            distance = cv.magnitude((rowIndex-row), (colIndex-col))
-            dst[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
-    return dst
-
-'''
-def generatePseudoECG(srcDir, dstDir):
-    src = loadData(srcDir = srcDir)
-    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
-    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
-    diffVKernel[1, :, 0] = 1
-    diffVKernel[:, 1, 0] = 1
-    diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
-    distance = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
-    pseudoECG = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
-    firstRowIndex = np.linspace(0, src.shape[1], num = src.shape[1], endpoint = False)
-    firstColIndex = np.linspace(0, src.shape[2], num = src.shape[2], endpoint = False)
-    colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-    for i in range(0, src.shape[0]):
-        diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
-        for row in range(0, src.shape[1]):
-            for col in range(0, src.shape[2]):
-                distance = cv.magnitude((rowIndex-row), (colIndex-col))
-                pseudoECG[row,col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        dstFileName = dstPath + '%06d'%i
-        np.save(dstFileName, pseudoECG)
-    print('completed')
-'''
-
-def downSample(src, dst, samplePoints = (20, 20)):
-    rowStride = math.floor(src.shape[0]/samplePoints[0])
-    colStride = math.floor(src.shape[1]/samplePoints[1])
-    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    resized = cv.resize(src, multipleOfStride)
-    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
-    for row in range(0, samplePoints[0]):
-        for col in range(0, samplePoints[1]):
-            sample[row, col] = resized[row*rowStride, col*colStride]
-    dst = np.ndarray(src.shape, dtype = DATA_TYPE)
-    dst = cv.resize(sample, src.shape, dst, 0, 0, cv.INTER_NEAREST)
-
-def downSample(srcPath, dstPath, samplePoints = (5, 5), interpolationSize = (200, 200)):
-    src = loadData(srcPath, approximateData = False)
-    rowStride = math.floor(src.shape[1]/samplePoints[0])
-    colStride = math.floor(src.shape[2]/samplePoints[1])
-    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    temp = np.ndarray(multipleOfStride, dtype = DATA_TYPE) #Its size is a multiple of stride + 1
-    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
-    interpolated = np.ndarray(interpolationSize, dtype = DATA_TYPE)
-    for i in range(0, src.shape[0]):
-        temp = cv.resize(src[i, :, :], multipleOfStride)
-        for j in range(0, samplePoints[0]):
-            for k in range(0, samplePoints[1]):
-                sample[j, k] = temp[j*rowStride, k*colStride]
-        interpolated = cv.resize(sample, interpolationSize, interpolated, 0, 0, cv.INTER_NEAREST)
-        dstFileName = dstPath + '%06d'%i
-        np.save(dstFileName, interpolated)
-    print('down sampling completed')
-
-def generateSparsePseudoECG(srcPath, dstPath, samplePoints = (10, 10)):
-    src = loadData(srcPath)
-    rowStride = math.floor(src.shape[1]/samplePoints[0])
-    colStride = math.floor(src.shape[2]/samplePoints[1])
-    multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
-    temp = np.ndarray(multipleOfStride, dtype = DATA_TYPE) #Its size is a multiple of stride
-    sample = np.ndarray(samplePoints, dtype = DATA_TYPE)
-    diffVKernel = np.zeros((3, 3, 1), dtype = DATA_TYPE)
-    diffVKernel[1, :, 0] = 1
-    diffVKernel[:, 1, 0] = 1
-    diffVKernel[1, 1, 0] = -4
-    diffV = np.ndarray(multipleOfStride, dtype = DATA_TYPE)
-    firstRowIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
-    firstColIndex = np.linspace(0, temp.shape[0], num = temp.shape[1], endpoint = False)
-    colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
-    distance = np.ndarray(multipleOfStride, dtype = DATA_TYPE)
-    pseudoECG = np.ndarray(samplePoints, dtype = DATA_TYPE)
-    interpolated = np.ndarray((src.shape[1], src.shape[2]), dtype = DATA_TYPE)
-    for i in range(0, src.shape[0]):
-        #diffV = cv.filter2D(src = src[i], ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
-        temp = cv.resize(src[i, :, :], multipleOfStride, temp, 0, 0, cv.INTER_CUBIC)
-        diffV = cv.filter2D(src = temp, ddepth = -1, kernel = diffVKernel, dst = diffV, anchor = (-1, -1), delta = 0, borderType = cv.BORDER_REPLICATE)
-        for row in range(0, samplePoints[0]):
-            for col in range(0, samplePoints[1]):
-                distance = cv.magnitude((rowIndex-row*rowStride), (colIndex-col*colStride))
-                pseudoECG[row, col] = cv.sumElems(cv.divide(diffV, distance))[0]
-        interpolated = cv.resize(pseudoECG, (src.shape[1], src.shape[2]), interpolated, 0, 0, cv.INTER_NEAREST)
-        np.save(dstPath + '%06d'%i, interpolated)
-
 def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
     fileName = glob.glob(srcPath + '*.png')
     if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype = DATA_TYPE)
+        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype=DATA_TYPE)
     else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype = DATA_TYPE)
-        tempImg = np.ndarray((imgRows, imgCols), dtype = DATA_TYPE)
-    rawImg = np.ndarray((rawRows, rawCols), dtype = DATA_TYPE)
+        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype=DATA_TYPE)
+        tempImg = np.ndarray((imgRows, imgCols), dtype=DATA_TYPE)
+    rawImg = np.ndarray((rawRows, rawCols), dtype=DATA_TYPE)
     for i in range(0, len(fileName)):
         localName = srcPath + '%06d'%i + ".png"
         rawImg = cv.imread(localName, -1)
@@ -171,7 +146,7 @@ def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, 
 def create3DData(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
-    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype = DATA_TYPE)
+    dst = np.zeros((framesNum, temporalDepth, src.shape[1], src.shape[2]), dtype=DATA_TYPE)
     for i in range(0, paddingDepth):
         dst[i, paddingDepth-i:temporalDepth, :, :] = src[0:temporalDepth-paddingDepth+i, :, :]
         dst[framesNum-1-i, 0:temporalDepth-paddingDepth+i, :, :] = src[framesNum-(temporalDepth-paddingDepth)-i:framesNum, :, :]
@@ -179,48 +154,26 @@ def create3DData(src, temporalDepth):
         dst[i, :, :, :] = src[i-paddingDepth:i+paddingDepth+1, :, :]
     return dst
 
-def clipData(srcPath, dstPath, bounds = [0., 1.]):
-    src = loadData(srcPath)
-    dst = np.clip(src, bounds[0], bounds[1])
-    for i in range(0, src.shape[0]):
-        dstFileName = dstPath + '%06d'%i
-        np.save(dstFileName, dst[i])
-
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
     dataType = src1.dtype
     dimension1 = src1.ndim
     dimension2 = src2.ndim
-    valNum = math.floor(valSplit*srcLength+0.1)
-    randomIndexes = random.sample(range(0, srcLength), valNum)
-    trainDataShape1 = np.ndarray((dimension1), dtype = np.uint8)
-    valDataShape1 = np.ndarray((dimension1), dtype = np.uint8)
-    trainDataShape1[0] = srcLength - valNum
-    valDataShape1[0] = valNum
-    trainDataShape1[1:dimension1] = src1.shape[1:dimension1]
-    valDataShape1[1:dimension1] = src1.shape[1:dimension1]
-    trainDataShape2 = np.ndarray((dimension2), dtype = np.uint8)
-    valDataShape2 = np.ndarray((dimension2), dtype = np.uint8)
-    trainDataShape2[0] = srcLength - valNum
-    valDataShape2[0] = valNum
-    trainDataShape2[1:dimension2] = src2.shape[1:dimension2]
-    valDataShape2[1:dimension2] = src2.shape[1:dimension2]
-    dst = [np.ndarray((trainDataShape1), dtype = dataType), np.ndarray((valDataShape1), dtype = dataType),
-    np.ndarray((trainDataShape2), dtype = dataType), np.ndarray((valDataShape2), dtype = dataType)]
-    dst[1] = np.take(src1, randomIndexes, 0)
-    dst[0] = np.delete(src1, randomIndexes, 0)
-    dst[3] = np.take(src2, randomIndexes, 0)
-    dst[2] = np.delete(src2, randomIndexes, 0)
-    return dst
+    valNum = math.floor(valSplit*srcLength + 0.1)
+    randomIndices = random.sample(range(0, srcLength), valNum)
+    val1 = np.take(src1, randomIndices, 0)
+    train1 = np.delete(src1, randomIndices, 0)
+    val2 = np.take(src2, randomIndices, 0)
+    train2 = np.delete(src2, randomIndices, 0)
+    return [train1, val1, train2, val2]
 
-def copyMassiveData(srcPathList, dstPath, potentialName):
+def copyMassiveData(srcDirList, dstDir, potentialName):
     startNum = 0
-    for srcPath in srcPathList:
-        fileName = sorted(glob.glob(srcPath + potentialName + '*.npy'))
+    for srcPath in srcDirList:
+        fileName = sorted(glob.glob(srcDir + potentialName + '*.npy'))
         for srcName in fileName:
             dst = np.load(srcName)
-            dstFileName = dstPath + '%06d'%startNum
-            np.save(dstFileName, dst)
+            np.save(dstDir + '%06d'%startNum, dst)
             startNum += 1
 
 def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
@@ -232,7 +185,3 @@ def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
-
-'''
-def annealingDownSample(srcPath, dst, maskPath)
-'''

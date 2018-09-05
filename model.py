@@ -286,7 +286,7 @@ class GAN(object):
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
-        extraRaw = dataProc.loadData(srcPath = extraPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        extraRaw = dataProc.loadData(srcDir = extraPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         if self.netGName == 'uNet':
             extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
@@ -294,7 +294,7 @@ class GAN(object):
             extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
             extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        memRaw = dataProc.loadData(srcPath = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        memRaw = dataProc.loadData(srcDir = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
         memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
@@ -317,6 +317,8 @@ class GAN(object):
             lossCounter = realNetGOnlyEpochs
             lossRecorder[0:lossCounter, 0] = historyG.history['loss']
             lossRecorder[0:lossCounter, 1] = historyG.history['val_loss']
+        else:
+            realNetGOnlyEpochs = 0
         labelReal = np.ones((self.batchSize), dtype = np.float32)
         labelFake = -np.ones((self.batchSize), dtype = np.float32)
         dummyMem = np.zeros((self.batchSize), dtype = np.float32)
@@ -388,7 +390,7 @@ epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyS
         dataRange = [-1., 1.]
     else:
         dataRange = [0., 1.]
-    extraRaw = dataProc.loadData(srcPath = ecgPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+    extraRaw = dataProc.loadData(srcDir = ecgPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
     if netGName == 'uNet':
         netG = network.uNet()
         extraSequence = np.ndarray((extraRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
@@ -398,7 +400,7 @@ epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyS
         extraSequence = np.ndarray((extraRaw.shape[0], temporalDepth, imgRows, imgCols, channels), dtype = np.float32)
         extraRaw = dataProc.create3DData(extraRaw, temporalDepth = temporalDepth)
         extraSequence = extraRaw.reshape((extraSequence.shape[0], temporalDepth, imgRows, imgCols, channels))
-    memRaw = dataProc.loadData(srcPath = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+    memRaw = dataProc.loadData(srcDir = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
     memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
     memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
     trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
