@@ -52,7 +52,6 @@ class calculation(object):
         colStride = math.floor(src.shape[1]/samplePoints[1])
         multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
         resized = np.ndarray(multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
-        sample = np.ndarray(samplePoints, dtype=DATA_TYPE)
         diffVKernel = np.zeros((3, 3, 1), dtype=DATA_TYPE)
         diffVKernel[1, :, 0] = 1
         diffVKernel[:, 1, 0] = 1
@@ -156,9 +155,6 @@ def create3DData(src, temporalDepth):
 
 def splitTrainAndVal(src1, src2, valSplit):
     srcLength = src1.shape[0]
-    dataType = src1.dtype
-    dimension1 = src1.ndim
-    dimension2 = src2.ndim
     valNum = math.floor(valSplit*srcLength + 0.1)
     randomIndices = random.sample(range(0, srcLength), valNum)
     val1 = np.take(src1, randomIndices, 0)
@@ -169,7 +165,7 @@ def splitTrainAndVal(src1, src2, valSplit):
 
 def copyMassiveData(srcDirList, dstDir, potentialName):
     startNum = 0
-    for srcPath in srcDirList:
+    for srcDir in srcDirList:
         fileName = sorted(glob.glob(srcDir + potentialName + '*.npy'))
         for srcName in fileName:
             dst = np.load(srcName)
