@@ -11,6 +11,12 @@ import random
 
 DATA_TYPE = np.float64
 INTERPOLATION_METHOD = cv.INTER_NEAREST # Use nearest interpolation if it is the last step, otherwise use cubic
+VIDEO_FPS = 100
+VIDEO_FRAME_SIZE = (200, 200)
+PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
+PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
+PSEUDO_ECG_CONV_KERNEL[:, 1, 0] = 1
+PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 
 class calculation(object):
     def __init__(self, dst=None, shape=None):
@@ -19,12 +25,8 @@ class calculation(object):
             self.dst = np.ndarray(shape, dtype=DATA_TYPE)
 
     def calcPseudoEcg(self, src): # src: extra cellular potential map, dst: pseudo-ECG map
-        diffVKernel = np.zeros((3, 3, 1), dtype=DATA_TYPE)
-        diffVKernel[1, :, 0] = 1
-        diffVKernel[:, 1, 0] = 1
-        diffVKernel[1, 1, 0] = -4
         diffV = np.ndarray(src.shape, dtype=DATA_TYPE)
-        diffV = cv.filter2D(src=src, ddepth =-1, kernel=diffVKernel, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        diffV = cv.filter2D(src=src, ddepth =-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
         distance = np.ndarray(src.shape, dtype=DATA_TYPE)
         firstRowIndex = np.linspace(0, src.shape[0], num=src.shape[1], endpoint=False)
         firstColIndex = np.linspace(0, src.shape[1], num=src.shape[1], endpoint=False)
@@ -52,10 +54,6 @@ class calculation(object):
         colStride = math.floor(src.shape[1]/samplePoints[1])
         multipleOfStride = ((samplePoints[0]-1)*rowStride+1, (samplePoints[1]-1)*colStride+1)
         resized = np.ndarray(multipleOfStride, dtype=DATA_TYPE) #Its size is a multiple of stride
-        diffVKernel = np.zeros((3, 3, 1), dtype=DATA_TYPE)
-        diffVKernel[1, :, 0] = 1
-        diffVKernel[:, 1, 0] = 1
-        diffVKernel[1, 1, 0] = -4
         diffV = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
         firstRowIndex = np.linspace(0, resized.shape[0], num=resized.shape[0], endpoint=False)
         firstColIndex = np.linspace(0, resized.shape[1], num=resized.shape[1], endpoint=False)
@@ -63,7 +61,7 @@ class calculation(object):
         distance = np.ndarray(multipleOfStride, dtype=DATA_TYPE)
         pseudoEcg = np.ndarray(samplePoints, dtype=DATA_TYPE)
         resized = cv.resize(src, multipleOfStride, resized, 0, 0, cv.INTER_CUBIC)
-        diffV = cv.filter2D(src=resized, ddepth=-1, kernel=diffVKernel, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
+        diffV = cv.filter2D(src=resized, ddepth=-1, kernel=PSEUDO_ECG_CONV_KERNEL, dst=diffV, anchor=(-1, -1), delta=0, borderType=cv.BORDER_REPLICATE)
         for row in range(0, samplePoints[0]):
             for col in range(0, samplePoints[1]):
                 distance = cv.magnitude((rowIndex - row*rowStride), (colIndex - col*colStride))
@@ -121,27 +119,6 @@ def loadData(srcDir, resize=False, srcSize=(200, 200), dstSize=(256, 256), norma
         dst = lowerBound + ((dst-min)*(upperBound-lowerBound))/(max-min)
     return dst
 
-def loadImage(srcPath, resize = 0, rawRows = 200, rawCols = 200, imgRows = 256, imgCols = 256, normalization = 0):
-    fileName = glob.glob(srcPath + '*.png')
-    if resize == 0:
-        mergeImg = np.ndarray((len(fileName), rawRows, rawCols), dtype=DATA_TYPE)
-    else:
-        mergeImg = np.ndarray((len(fileName), imgRows, imgCols), dtype=DATA_TYPE)
-        tempImg = np.ndarray((imgRows, imgCols), dtype=DATA_TYPE)
-    rawImg = np.ndarray((rawRows, rawCols), dtype=DATA_TYPE)
-    for i in range(0, len(fileName)):
-        localName = srcPath + '%06d'%i + ".png"
-        rawImg = cv.imread(localName, -1)
-        if resize == 1:
-            mergeImg[i] = cv.resize(rawImg, (imgRows, imgCols))
-        else:
-            mergeImg[i] = rawImg
-    if normalization == 1:
-        min = np.amin(mergeImg)
-        max = np.amax(mergeImg)
-        mergeImg = (mergeImg-min)/(max-min)
-    return mergeImg
-
 def create3DData(src, temporalDepth):
     framesNum = src.shape[0]
     paddingDepth = math.floor((temporalDepth-1)/2 + 0.1)
@@ -172,7 +149,7 @@ def copyMassiveData(srcDirList, dstDir, potentialName):
             np.save(dstDir + '%06d'%startNum, dst)
             startNum += 1
 
-def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
+def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
     fileName = sorted(glob.glob(srcPath + '*.npy'))
     del fileName[endNum+1:len(fileName)]
     del fileName[0:startNum]
@@ -181,3 +158,10 @@ def copyData(srcPath, dstPath, startNum = 0, endNum = None, shiftNum = 0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
+
+def makeVideo(srcDir, dstPath):
+    src = loadData(srcDir=srcDir, normalization=True, normalizationRange=(0, 255)).astype(np.uint8)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*'XVID'), fps=VIDEO_FPS, frameSize=VIDEO_FRAME_SIZE, isColor=False)
+    for i in range(0, src.shape[0]):
+        writer.write(src[i])
+    writer.release

@@ -5,11 +5,11 @@ import numpy as np
 import cv2 as cv
 import os
 import glob
-import keras
 import math
 import functools
 import datetime
 import tensorflow as tf
+import keras
 import keras.backend as K
 from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
@@ -19,6 +19,7 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, Learnin
 from keras import backend
 from keras.layers.advanced_activations import LeakyReLU
 from keras.utils import to_categorical
+
 import dataProc
 
 class networks(object):
@@ -82,7 +83,7 @@ class networks(object):
         connection7 = Concatenate(axis = -1, name = 'connection7')([decoder7, encoder1])
         decoder8 = Conv2D(self.gKernels, self.gKernelSize, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal', name = 'decoder8')(UpSampling2D(size = (2,2))(connection7))
         decoder9 = Conv2D(1, 1, activation = self.activationG, name = 'decoder9')(decoder8)
-        model = Model(input = inputs, output = decoder9, name = 'uNet')
+        model = Model(inputs=inputs, outputs = decoder9, name = 'uNet')
         return model
 
     def uNet3D(self):
@@ -153,7 +154,7 @@ class networks(object):
         decoder9 = Conv3D(1, kernel_size = (self.temporalDepth, 4, 4), activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(decoder8)
         decoder10 = Conv3D(1, kernel_size = (self.temporalDepth, 1, 1), activation = self.activationG, padding = 'valid', kernel_initializer = 'he_normal')(decoder9)
         squeezed10 = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(decoder10)
-        model = Model(input = inputs, output = squeezed10, name = 'uNet3D')
+        model = Model(inputs = inputs, outputs = squeezed10, name = 'uNet3D')
         return model
 
     def straight3(self):
@@ -177,7 +178,7 @@ class networks(object):
         dense5 = LeakyReLU(alpha = 0.2)(dense5)
         drop5 = Dropout(0.5)(dense5)
         probability = Dense(1, activation = 'linear')(drop5)
-        model = Model(input = inputs, output = probability, name='straight3')
+        model = Model(inputs = inputs, outputs = probability, name='straight3')
         return model
 
     def vgg16(self):
@@ -206,7 +207,7 @@ class networks(object):
         dense7 = Dense(self.dKernels*64, activation = 'relu')(drop6)
         drop7 = Dropout(0.5)(dense7)
         probability = Dense(1, activation = 'linear')(drop7)
-        model = Model(input = inputs, output = probability, name='VGG16')
+        model = Model(inputs = inputs, outputs = probability, name='VGG16')
         return model
 
 class GAN(object):
@@ -271,7 +272,7 @@ class GAN(object):
             middleLayerOfInputs = Lambda(squeeze, output_shape = (self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
             inputsD = Concatenate(axis = -1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
-        self.netA = Model(input = inputsA, output =[outputsG, outputsD], name = 'netA')
+        self.netA = Model(inputs = inputsA, outputs =[outputsG, outputsD], name = 'netA')
         self.netA.compile(optimizer = Adam(lr = self.learningRateG, beta_1 = beta1, beta_2 = beta2), loss = [lossFuncG, wassersteinDistance], loss_weights = [1, lossDWeight])
         print(self.netA.metrics_names)
         self.netG.compile(optimizer = Adam(lr = self.learningRateG), loss = self.lossFuncG, metrics = [self.lossFuncG])
@@ -280,64 +281,54 @@ class GAN(object):
         self.penalizedNetD.summary()
         self.netA.summary()
 
-    def trainGAN(self, extraPath, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
-    approximateData = True, trainingRatio = 5, earlyStoppingPatience = 10):
+    def trainGAN(self, pEcgDir, memDir, modelDir, epochsNum=100, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
+    approximateData=True, trainingRatio=5, earlyStoppingPatience=10):
         if self.activationG == 'tanh':
             dataRange = [-1., 1.]
         else:
             dataRange = [0., 1.]
-        extraRaw = dataProc.loadData(srcDir = extraPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
         if self.netGName == 'uNet':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
-            extraSequence = extraRaw.reshape((extraRaw.shape[0], self.imgRows, self.imgCols, self.channels))
+            #pEcgSequence = np.ndarray((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
+            pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
-            extraRaw = dataProc.create3DData(extraRaw, temporalDepth = self.temporalDepth)
-            extraSequence = extraRaw.reshape((extraSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        memRaw = dataProc.loadData(srcDir = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
-        memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
+            #extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
+            pEcgSequence = dataProc.create3DData(pEcgRaw, temporalDepth = self.temporalDepth)
+            pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+        memRaw = dataProc.loadData(srcDir = memDir, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+        #memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
-        trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
+        print('traing data loaded')
+
+        trainingDataLength = math.floor((1-valSplit)*memSequence.shape[0]+0.1)
         lossRecorder = np.ndarray((math.floor(trainingDataLength/self.batchSize + 0.1)*epochsNum, 2), dtype = np.float32)
         lossCounter = 0
-        minLossG = 10000.0
-        weightsDPath = modelPath + 'netD_latest.h5'
-        weightsGPath = modelPath + 'netG_latest.h5'
+        minLossG = np.inf
+        weightsDPath = modelDir + 'netD_latest.h5'
+        weightsGPath = modelDir + 'netG_latest.h5'
         if continueTrain == True:
             self.netG.load_weights(pretrainedGPath)
             self.netD.load_weights(pretrainedDPath)
-        if netGOnlyEpochs > 0:
-            self.netD.save_weights(weightsDPath, overwrite = True)
-            checkpointer = ModelCheckpoint(weightsGPath, monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
-            earlyStopping = EarlyStopping(patience = 10, verbose = 1)
-            print('begin to train netG')
-            historyG = self.netG.fit(x = extraSequence, y = memSequence, batch_size = self.batchSize, epochs = netGOnlyEpochs, verbose = 2, shuffle = True,
-            validation_split = valSplit, callbacks = [checkpointer, earlyStopping])
-            realNetGOnlyEpochs = len(historyG.history['loss'])
-            lossCounter = realNetGOnlyEpochs
-            lossRecorder[0:lossCounter, 0] = historyG.history['loss']
-            lossRecorder[0:lossCounter, 1] = historyG.history['val_loss']
-        else:
-            realNetGOnlyEpochs = 0
         labelReal = np.ones((self.batchSize), dtype = np.float32)
         labelFake = -np.ones((self.batchSize), dtype = np.float32)
         dummyMem = np.zeros((self.batchSize), dtype = np.float32)
         earlyStoppingCounter = 0
         print('begin to train GAN')
-        for currentEpoch in range(realNetGOnlyEpochs, epochsNum):
+
+        for currentEpoch in range(0, epochsNum):
             beginingTime = datetime.datetime.now()
-            [extraTrain, extraVal, memTrain, memVal] = dataProc.splitTrainAndVal(extraSequence, memSequence, valSplit)
+            [pEcgTrain, pEcgVal, memTrain, memVal] = dataProc.splitTrainAndVal(pEcgSequence, memSequence, valSplit)
             for currentBatch in range(0, trainingDataLength, self.batchSize):
-                extraLocal = extraTrain[currentBatch:currentBatch+self.batchSize, :]
+                pEcgLocal = pEcgTrain[currentBatch:currentBatch+self.batchSize, :]
                 memLocal = memTrain[currentBatch:currentBatch+self.batchSize, :]
                 randomIndexes = np.random.randint(low = 0, high = trainingDataLength-self.batchSize-1, size = trainingRatio, dtype = np.int32)
                 for i in range(0, trainingRatio):
-                    extraForD = extraTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
+                    pEcgForD = pEcgTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
                     memForD = memTrain[randomIndexes[i]:randomIndexes[i]+self.batchSize]
-                    lossD = self.penalizedNetD.train_on_batch([extraForD, memForD], [labelReal, labelFake, dummyMem])
-                lossA = self.netA.train_on_batch(extraLocal, [memLocal, labelReal])
+                    lossD = self.penalizedNetD.train_on_batch([pEcgForD, memForD], [labelReal, labelFake, dummyMem])
+                lossA = self.netA.train_on_batch(pEcgLocal, [memLocal, labelReal])
             #validate the model
-            lossVal = self.netG.evaluate(x = extraVal, y = memVal, batch_size = self.batchSize, verbose = 0)
+            lossVal = self.netG.evaluate(x = pEcgVal, y = memVal, batch_size = self.batchSize, verbose = 0)
             lossRecorder[lossCounter, 0] = lossA[0]
             lossRecorder[lossCounter, 1] = lossVal[0]
             lossCounter += 1
@@ -351,7 +342,7 @@ class GAN(object):
             if earlyStoppingCounter == earlyStoppingPatience:
                 print('early stopping')
                 break
-        np.save(modelPath + 'loss', lossRecorder)
+        np.save(modelDir + 'loss', lossRecorder)
         print('training completed')
 
     def diminishElectrodes(self, extraPathList, memPath, modelPath, epochsNum = 100, netGOnlyEpochs = 0, valSplit = 0.2, continueTrain = False, pretrainedGPath = None, pretrainedDPath = None,
@@ -372,7 +363,7 @@ class GAN(object):
                 isFirstStep = False
                 previousGPath = modelPath + 'model_%04d/netG_latest.h5'%(i-1)
                 previousDPath = modelPath + 'model_%04d/netD_latest.h5'%(i-1)
-            self.trainGAN(extraPath = extraPathList[i], memPath = memPath, modelPath = currentModelPath, epochsNum = epochsNum, netGOnlyEpochs = netGOnlyEpochs, valSplit = valSplit,
+            self.trainGAN(pEcgDir = extraPathList[i], memDir = memPath, modelDir = currentModelPath, epochsNum = epochsNum, valSplit = valSplit,
             continueTrain = not isFirstStep, pretrainedGPath = previousGPath, pretrainedDPath = previousDPath, approximateData = approximateData,
             trainingRatio = trainingRatio, earlyStoppingPatience = earlyStoppingPatience)
 
@@ -382,7 +373,7 @@ class GAN(object):
         return dst
 
 
-def trainG(ecgPath, memPath, modelPath, imgRows = 256, imgCols = 256, channels = 1, netGName = 'uNet', activationG = 'relu', temporalDepth = None, gKernels = 64, gKernelSize = 4,
+def trainG(pEcgPath, memPath, modelPath, imgRows = 256, imgCols = 256, channels = 1, netGName = 'uNet', activationG = 'relu', temporalDepth = None, gKernels = 64, gKernelSize = 4,
 epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyStoppingPatience = 10, valSplit = 0.2, approximateData = True):
     network = networks(imgRows = imgRows, imgCols = imgCols, channels = channels, gKernels = gKernels, gKernelSize = gKernelSize, temporalDepth = temporalDepth,
     activationG = activationG)
@@ -390,7 +381,7 @@ epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyS
         dataRange = [-1., 1.]
     else:
         dataRange = [0., 1.]
-    extraRaw = dataProc.loadData(srcDir = ecgPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
+    extraRaw = dataProc.loadData(srcDir = pEcgPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
     if netGName == 'uNet':
         netG = network.uNet()
         extraSequence = np.ndarray((extraRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
@@ -403,14 +394,13 @@ epochsNum = 100, lossFuncG = 'mae', batchSize = 10, learningRateG = 1e-4, earlyS
     memRaw = dataProc.loadData(srcDir = memPath, resize = 1, normalization = 1, normalizationRange = dataRange, approximateData = approximateData)
     memSequence = np.ndarray((memRaw.shape[0], imgRows, imgCols, channels), dtype = np.float32)
     memSequence = memRaw.reshape((memRaw.shape[0], imgRows, imgCols, channels))
-    trainingDataLength = math.floor((1-valSplit)*extraSequence.shape[0]+0.1)
     netG.compile(optimizer = Adam(lr = learningRateG), loss = lossFuncG, metrics = [lossFuncG])
     netG.summary()
     checkpointer = ModelCheckpoint(modelPath+'netG_latest.h5', monitor = 'val_loss', verbose = 1, save_best_only = True, save_weights_only = True, mode = 'min')
     earlyStopping = EarlyStopping(patience = earlyStoppingPatience, verbose = 1)
     print('begin to train netG')
-    historyG = netG.fit(x = extraSequence, y = memSequence, batch_size = batchSize, epochs = epochsNum, verbose = 2, shuffle = True, validation_split = valSplit,
-    callbacks = [checkpointer, earlyStopping])
+    historyG = netG.fit(x=extraSequence, y=memSequence, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
+    callbacks=[checkpointer, earlyStopping])
 
 def squeeze(src):
     dst = tf.squeeze(src, [1])
@@ -432,7 +422,6 @@ def calculateGradientPenaltyLoss(true, prediction, samples, weight):
     gradientsSqrSum = K.sum(gradientsSqr, axis = np.arange(1, len(gradientsSqr.shape)))
     gradientsL2Norm = K.sqrt(gradientsSqrSum)
     penalty = weight*K.square(1-gradientsL2Norm)
-    print(penalty.shape)
     averagePenalty = K.mean(penalty, axis = 0)
     return averagePenalty
 
