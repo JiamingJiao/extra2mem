@@ -281,6 +281,7 @@ class GAN(object):
         self.penalizedNetD.summary()
         self.netA.summary()
 
+    # ((number of training samples*validation split ratio)/batch size) should be an integer
     def trainGAN(self, pEcgDir, memDir, modelDir, epochsNum=100, valSplit=0.2, continueTrain=False, pretrainedGPath=None, pretrainedDPath=None,
     approximateData=True, trainingRatio=5, earlyStoppingPatience=10):
         if self.activationG == 'tanh':
