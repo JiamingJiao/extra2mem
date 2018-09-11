@@ -14,6 +14,7 @@ import keras.backend as K
 from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
+from keras.layers import ConvLSTM2D
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, LearningRateScheduler
 from keras import backend
@@ -150,11 +151,74 @@ class networks(object):
         connection7 = Concatenate(axis=-1)([decoder7, encoder1])
         decoder8 = Conv3D(self.gKernels, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
         padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(connection7))
-        #decoder9 = Conv3D(1, 1, activation = 'sigmoid')(decoder8)
         decoder9 = Conv3D(1, kernel_size=(self.temporalDepth, 4, 4), activation='relu', padding='same', kernel_initializer='he_normal')(decoder8)
         decoder10 = Conv3D(1, kernel_size=(self.temporalDepth, 1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder9)
-        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels))(decoder10)
+        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder10)
         model = Model(inputs=inputs, outputs=squeezed10, name='uNet3D')
+        return model
+    
+    def convLstm(self):
+        inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
+        encoder1 = ConvLSTM2D(self.gKernels, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', name='encoder1',
+        return_sequences=True)(inputs)
+        encoder2 = ConvLSTM2D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder1)
+        encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
+        encoder2 = LeakyReLU(alpha=0.2, name='encoder2')(encoder2)
+        encoder3 = ConvLSTM2D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder2)
+        encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
+        encoder3 = LeakyReLU(alpha=0.2, name='encoder3')(encoder3)
+        encoder4 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder3)
+        encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
+        encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(encoder4)
+        encoder5 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder4)
+        encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
+        encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(encoder5)
+        encoder6 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder5)
+        encoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder6)
+        encoder6 = LeakyReLU(alpha=0.2, name='encoder6')(encoder6)
+        encoder7 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder6)
+        encoder7 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder7)
+        encoder7 = LeakyReLU(alpha=0.2, name='encoder7')(encoder7)
+        encoder8 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder7)
+        encoder8 = LeakyReLU(alpha=0.2, name='encoder8')(encoder8)
+
+        decoder1 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(encoder8))
+        decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
+        decoder1 = Dropout(0.5, name='decoder1')(decoder1)
+        connection1 = Concatenate(axis=-1, name='connection1')([decoder1, encoder7])
+        decoder2 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection1))
+        decoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder2)
+        decoder2 = Dropout(0.5, name='decoder2')(decoder2)
+        connection2 = Concatenate(axis=-1, name='connection2')([decoder2, encoder6])
+        decoder3 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection2))
+        decoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder3)
+        decoder3 = Dropout(0.5, name='decoder3')(decoder3)
+        connection3 = Concatenate(axis=-1, name='connection3')([decoder3, encoder5])
+        decoder4 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection3))
+        decoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False, name='decoder4')(decoder4)
+        connection4 = Concatenate(axis=-1, name='connection4')([decoder4, encoder4])
+        decoder5 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection4))
+        decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False, name='decoder5')(decoder5)
+        connection5 = Concatenate(axis=-1, name='connection5')([decoder5, encoder3])
+        decoder6 = ConvLSTM2D(self.gKernels*4, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection5))
+        decoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False, name='decoder6')(decoder6)
+        connection6 = Concatenate(axis=-1, name='connection6')([decoder6, encoder2])
+        decoder7 = ConvLSTM2D(self.gKernels*2, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
+        (UpSampling3D(size=(1, 2, 2))(connection6))
+        decoder7 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False, name='decoder7')(decoder7)
+        connection7 = Concatenate(axis=-1, name='connection7')([decoder7, encoder1])
+        decoder8 = ConvLSTM2D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True, name='decoder8') \
+        (UpSampling3D(size = (1, 2, 2))(connection7))
+        decoder9 = ConvLSTM2D(1, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=False)(decoder8)
+        decoder10 = Conv2D(1, kernel_size=(self.temporalDepth, 1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder9)
+        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder10)
+        model = Model(inputs=inputs, outputs=squeezed10, name='convLstm')
         return model
 
     def straight3(self):
@@ -269,7 +333,7 @@ class GAN(object):
             inputsA = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
             outputsG = self.netG(inputsA)
             middleLayerOfInputs = Lambda(slice, output_shape=(1, self.imgRows, self.imgCols, self.channels))(inputsA)
-            middleLayerOfInputs = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels))(middleLayerOfInputs)
+            middleLayerOfInputs = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(middleLayerOfInputs)
             inputsD = Concatenate(axis=-1)([middleLayerOfInputs, outputsG])
         outputsD = self.netD(inputsD)
         self.netA = Model(inputs=inputsA, outputs=[outputsG, outputsD], name='netA')
@@ -290,14 +354,11 @@ class GAN(object):
             dataRange = [0., 1.]
         pEcgRaw = dataProc.loadData(srcDir=pEcgDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
         if self.netGName == 'uNet':
-            #pEcgSequence = np.ndarray((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             pEcgSequence = pEcgRaw.reshape((pEcgRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         elif self.netGName == 'uNet3D':
-            #extraSequence = np.ndarray((extraRaw.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels), dtype = np.float32)
             pEcgSequence = dataProc.create3DData(pEcgRaw, temporalDepth = self.temporalDepth)
             pEcgSequence = pEcgSequence.reshape((pEcgSequence.shape[0], self.temporalDepth, self.imgRows, self.imgCols, self.channels))
         memRaw = dataProc.loadData(srcDir=memDir, resize=1, normalization=1, normalizationRange=dataRange, approximateData=approximateData)
-        #memSequence = np.ndarray((memRaw.shape[0], self.imgRows, self.imgCols, self.channels), dtype = np.float32)
         memSequence = memRaw.reshape((memRaw.shape[0], self.imgRows, self.imgCols, self.channels))
         print('traing data loaded')
 
@@ -403,8 +464,8 @@ epochsNum=100, lossFuncG='mae', batchSize=10, learningRateG=1e-4, earlyStoppingP
     historyG = netG.fit(x=extraSequence, y=memSequence, batch_size=batchSize, epochs=epochsNum, verbose=2, shuffle=True, validation_split=valSplit,
     callbacks=[checkpointer, earlyStopping])
 
-def squeeze(src):
-    dst = tf.squeeze(src, [1])
+def squeeze(src, layer):
+    dst = tf.squeeze(src, [layer])
     return dst
 
 def slice(src):
