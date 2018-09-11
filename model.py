@@ -118,6 +118,7 @@ class networks(object):
         encoder8 = Conv3D(filters=self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), strides=(1, 2, 2), \
         padding='same', kernel_initializer='he_normal')(encoder7)
         encoder8 = LeakyReLU(alpha=0.2)(encoder8)
+        
         decoder1 = Conv3D(self.gKernels*8, kernel_size=(self.temporalDepth, 4, 4), activation='relu', \
         padding='same', kernel_initializer='he_normal')(UpSampling3D(size=(1,2,2))(encoder8))
         decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
