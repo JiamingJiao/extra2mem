@@ -14,7 +14,7 @@ import keras.backend as K
 from keras.models import *
 from keras.layers import Input, Concatenate, Conv2D, UpSampling2D, Dropout, BatchNormalization, Flatten, Dense, MaxPooling2D
 from keras.layers import Conv3D, UpSampling3D, MaxPooling3D, Reshape, Permute, Lambda, ZeroPadding3D
-from keras.layers import ConvLSTM2D
+from keras.layers import TimeDistributed, ConvLSTM2D
 from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, LearningRateScheduler
 from keras import backend
@@ -159,27 +159,34 @@ class networks(object):
     
     def convLstm(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))
-        encoder1 = ConvLSTM2D(self.gKernels, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', name='encoder1',
-        return_sequences=True)(inputs)
-        encoder2 = ConvLSTM2D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder1)
+        encoder1 = TimeDistributed(Conv2D(self.gKernels, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', name='encoder1'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(inputs)
+        encoder2 = TimeDistributed(Conv2D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder1)
         encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
         encoder2 = LeakyReLU(alpha=0.2, name='encoder2')(encoder2)
-        encoder3 = ConvLSTM2D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder2)
+        encoder3 = TimeDistributed(Conv2D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder2)
         encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
         encoder3 = LeakyReLU(alpha=0.2, name='encoder3')(encoder3)
-        encoder4 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder3)
+        encoder4 = TimeDistributed(Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder3)
         encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
         encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(encoder4)
-        encoder5 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder4)
+        encoder5 = TimeDistributed(Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder4)
         encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
         encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(encoder5)
-        encoder6 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder5)
+        encoder6 = TimeDistributed(Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder5)
         encoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder6)
         encoder6 = LeakyReLU(alpha=0.2, name='encoder6')(encoder6)
-        encoder7 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder6)
+        encoder7 = TimeDistributed(Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder6)
         encoder7 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder7)
         encoder7 = LeakyReLU(alpha=0.2, name='encoder7')(encoder7)
-        encoder8 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal', return_sequences=True)(encoder7)
+        encoder8 = TimeDistributed(Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', activation='linear', kernel_initializer='he_normal'),
+        input_shape=(self.temporalDepth, self.imgRows, self.imgCols, self.channels))(encoder7)
         encoder8 = LeakyReLU(alpha=0.2, name='encoder8')(encoder8)
 
         decoder1 = ConvLSTM2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True) \
@@ -216,9 +223,8 @@ class networks(object):
         decoder8 = ConvLSTM2D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=True, name='decoder8') \
         (UpSampling3D(size = (1, 2, 2))(connection7))
         decoder9 = ConvLSTM2D(1, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal', return_sequences=False)(decoder8)
-        decoder10 = Conv2D(1, kernel_size=(self.temporalDepth, 1, 1), activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder9)
-        squeezed10 = Lambda(squeeze, output_shape=(self.imgRows, self.imgCols, self.channels), arguments={'layer':1})(decoder10)
-        model = Model(inputs=inputs, outputs=squeezed10, name='convLstm')
+        decoder10 = Conv2D(1, kernel_size=1, activation=self.activationG, padding='valid', kernel_initializer='he_normal')(decoder9)
+        model = Model(inputs=inputs, outputs=decoder10, name='convLstm')
         return model
 
     def straight3(self):
