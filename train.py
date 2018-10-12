@@ -87,7 +87,7 @@ trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit
     np.save(modelDir + 'loss', lossRecorder)
     print('training completed')
 
-def prediction(pecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, electrodesNum, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet',
+def prediction(pecgDirList, dstDirList, modelDir, priorEcgRange, priorMemRange, rawSize=(200, 200), imgSize=(256, 256), channels=1, netGName='uNet',
 activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSize=3, batchSize=10):
     network = Networks(imgRows=imgSize[0], imgCols=imgSize[1], channels=channels, gKernels=gKernels, gKernelSize=gKernelSize, temporalDepth=temporalDepth)
     if netGName == 'uNet':

@@ -19,6 +19,7 @@ import model
 
 BLUE = (0, 0.439, 0.756)
 RED = (0.996, 0.380, 0.380)
+GREEN = (0.102, 0.655, 0.631)
 
 def calculateMae(src1, src2):
     difference = np.subtract(src1, src2)
@@ -37,12 +38,12 @@ def histEqualizationArray(src, depth = 8):
     for i in range(0, maxIntensity+1):
         dst[i] = temp + maxIntensity*histogram[i]/(pixNum)
         temp = dst[i]
-    dst = dst.astype(np.int32)
+    dst = dst.astype(np.int16)
     return dst
 
 def calculateHistTransArray(srcHist, dstHist, depth = 8):
     maxIntensity = 2**depth - 1
-    dst = np.zeros((maxIntensity+1), dtype = np.int32)
+    dst = np.zeros((maxIntensity+1), dtype = np.int16)
     accumulation = 0
     for i in range(0, maxIntensity+1):
         diff = maxIntensity+1
@@ -53,7 +54,7 @@ def calculateHistTransArray(srcHist, dstHist, depth = 8):
     return dst
 
 def histSpecification(src, transArray):
-    dst = np.zeros(src.shape, dtype = np.int32)
+    dst = np.zeros(src.shape, dtype = np.int16)
     for i in range(0, src.shape[0]):
         for j in range(0, src.shape[1]):
             dst[i, j] = transArray[src[i, j]]
@@ -146,7 +147,6 @@ class IntermediateLayers(model.Networks):
 class MemStream(opmap.videoData.VideoData):
     def __init__(self, srcDir, threshold, **videoDataArgs):
         tempData = dataProc.loadData(srcDir, withChannel=False)
-        print(tempData.shape)
         super(MemStream, self).__init__(length=tempData.shape[0], height=tempData.shape[1], width=tempData.shape[2], **videoDataArgs)
         #fileList = sorted(glob.glob(srcDir+'mem/*.npy'))
         self.camp = 'grey'
@@ -154,13 +154,15 @@ class MemStream(opmap.videoData.VideoData):
 
 class Phase(object):
     def __init__(self, srcDir, threshold=0.8):
-        src = MemStream(srcDir=srcDir, threshold=threshold)
-        self.phase = opmap.phaseMap.PhaseMap(src, width=src.data.shape[1])
+        self.mem = MemStream(srcDir=srcDir, threshold=threshold)
+        self.phase = opmap.phaseMap.PhaseMap(self.mem, width=self.mem.data.shape[1])
         self.phaseVariance = opmap.phaseVarianceMap.PhaseVarianceMap(self.phase)
         self.phaseVariancePeak = opmap.PhaseVariancePeakMap.PhaseVariancePeakMap(self.phaseVariance, threshold=threshold)
 
-def plotElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
+def drawElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191, 191), dstPath=-1):
     alpha = np.zeros((mapSize[0]+(radius+thickness+1)*2, mapSize[1]+(radius+thickness+1)*2, 1), dtype=np.uint8)
+    coordinates = np.around(coordinates)
+    coordinates = coordinates.astype(np.uint16)
     markerCenter = coordinates + radius + thickness + 1
     for i in markerCenter:
         center = tuple(i)
@@ -176,3 +178,96 @@ def plotElectrodes(coordinates, radius=2, thickness=-1, color=RED, mapSize=(191,
     if not dstPath == -1:
         cv.imwrite(dstPath, dst)
     return dst
+
+def markPhaseSingularity(srcDir1, srcDir2, dstDir, priorMemRange, truncate=10, **drawMarkersArgs):
+
+    def centersList(srcDir):
+        phase = Phase(srcDir)
+        phaseVariancePeak = phase.phaseVariancePeak.data[truncate:-truncate]
+        length = phaseVariancePeak.shape[0]
+        centersList = np.empty((length), dtype=object)
+        for i in range(0, length):
+            centersList[i] = centers(phaseVariancePeak[i])
+        return centersList
+    
+    centersList1 = centersList(srcDir1)
+    centersList2 = centersList(srcDir2)
+    length = centersList1.shape[0]
+    distance = np.empty((length), dtype=object)
+    background = dataProc.loadData(srcDir1, withChannel=False)[truncate:-truncate] # Markers are drawn on estimation
+    background = dataProc.scale(background, priorMemRange, (0, 255))
+    canvas = np.ndarray(background.shape+(3,), dtype=np.uint8)
+    statistics = np.zeros((5), dtype=np.float32) # mean, standard error, matching points, false postive, false negative
+    # Temporally, save video in the future
+    if not os.path.exists(dstDir):
+        os.makedirs(dstDir)
+    for i in range(0, length):
+        distance[i], matching, fp, fn = matchPoints(centersList1[i], centersList2[i])
+        canvas[i] = drawMarkers(background[i], (matching[0], fp, fn), **drawMarkersArgs)
+        statistics[2] += matching.shape[0]
+        statistics[3] += fp.shape[0]
+        statistics[4] += fn.shape[0]
+    if not dstDir == 'None':
+         for i in range(0, length):
+             # Temporally, save video in the future
+            cv.imwrite(dstDir+'%06d.png'%i, canvas[i])
+    else:
+        print('Images were not saved!')
+    distance = np.concatenate(distance)
+    statistics[0] = np.mean(distance)
+    statistics[1] = np.std(distance, ddof=1)
+    return canvas, statistics
+
+def drawMarkers(src, coordinatesList, colors=(BLUE, GREEN, RED), markerType=cv.MARKER_SQUARE, markerSize=20, thickness=2):
+    # coordinatesList is a list of n*2 arrays
+    # colors is a list of tupples
+    # IMPORTANT: src data type: uint8, range: [0, 255]
+    src = src.astype(np.uint8)
+    canvas = np.ndarray(src.shape+(3,), dtype=np.uint8)
+    cv.cvtColor(src, cv.COLOR_GRAY2BGR, canvas, 3)
+    for i in range(0, len(coordinatesList)):
+        coordinates = coordinatesList[i]
+        coordinates = np.around(coordinates)
+        coordinates = coordinates.astype(np.uint16)
+        bgrColor = (colors[i][2]*255, colors[i][1]*255, colors[i][0]*255)
+        for j in range(0, coordinates.shape[0]):
+            cv.drawMarker(canvas, tuple(coordinates[j]), bgrColor, markerType, markerSize, thickness, cv.LINE_4)
+    return canvas
+
+def centers(src):
+    src = src.astype(np.uint8)
+    _, contours, _ = cv.findContours(src, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+    contoursNum = len(contours)
+    dst = np.ndarray((contoursNum, 1, 2), dtype=np.float32)
+    for i in range(0, contoursNum):
+        dst[i, 0, :] = np.mean(contours[i], 0)
+    dst = dst.reshape((contoursNum, 2))
+    return dst
+
+def matchPoints(src1, src2): #src2 is groundtruth
+    num1 = src1.shape[0]
+    num2 = src2.shape[0]
+    allDistance = np.ndarray((num1, num2), dtype=np.float32)
+    for i in range(0, num1):
+        cv.magnitude(src2[: ,0]-src1[i, 0], src2[:, 1]-src1[i, 1], allDistance[i, :])
+    matchingNum = min(num1, num2)
+    matching = np.ndarray((2, matchingNum, 2), dtype=np.float32)
+    distance = np.ndarray((matchingNum), dtype=np.float32)
+    location = np.ndarray((matchingNum, 2), dtype = np.uint8)
+    for i in range(0, matchingNum):
+        location[i] = np.unravel_index(allDistance.argmin(), (num1, num2))
+        distance[i] = allDistance[tuple(location[i])]
+        allDistance[location[i, 0], :] = np.inf
+        allDistance[:, location[i, 1]] = np.inf
+    matching[0, :, :] = src1[location[:, 0]] # advanced indexing
+    matching[1, :, :] = src2[location[:, 1]]
+    if num1 == num2:
+        fp = np.ndarray((0))
+        fn = np.ndarray((0))
+    elif num1 > num2:
+        fp = np.delete(src1, location[:, 0], 0)
+        fn = np.ndarray((0))
+    else:
+        fp = np.ndarray((0))
+        fn = np.delete(src2, location[:, 1], 0)
+    return distance, matching, fp, fn

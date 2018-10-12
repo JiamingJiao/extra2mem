@@ -16,7 +16,7 @@ DATA_TYPE = np.float32
 CV_DATA_TYPE = cv.CV_32F
 INTERPOLATION_METHOD = cv.INTER_NEAREST
 NORM_RANGE = (0, 1)
-VIDEO_ENCODER = 'H264'
+VIDEO_ENCODER = 'XVID'
 VIDEO_FPS = 50
 IMG_SIZE = (200, 200)
 PSEUDO_ECG_CONV_KERNEL = np.zeros((3, 3, 1), dtype=DATA_TYPE)
@@ -91,15 +91,17 @@ class AccurateUniformSparsePecg(object):
 '''
 
 class AccurateSparsePecg(SparsePecg):
-    def __init__(self, srcShape, removeNum, fullCoordinatesShape, coordinatesDir):
+    def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir):
         self.srcShape = srcShape
         rowStride = math.floor(srcShape[0]/fullCoordinatesShape[0])
         colStride = math.floor(srcShape[1]/fullCoordinatesShape[1])
         self.multipleOfStride = ((fullCoordinatesShape[0]-1)*rowStride+1, (fullCoordinatesShape[1]-1)*colStride+1)
-        fullCoordinates = uniformCoordinates(fullCoordinatesShape, self.multipleOfStride)
-        coordinates = removePoints(fullCoordinates, removeNum)
+        coordinates = removePoints(parentCoordinates, removeNum)
         super(AccurateSparsePecg, self).__init__(self.multipleOfStride, coordinates)
-        np.save(coordinatesDir, self.coordinates)
+        if not coordinatesDir == 'None':
+            np.save(coordinatesDir, self.coordinates)
+        else:
+            print('coordinates were not saved!')
     
     def resizeAndCalc(self, srcDirList, dstDirList):
         resizedSrc = np.ndarray((self.multipleOfStride+(1,)), dtype=DATA_TYPE)
@@ -274,7 +276,7 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0)):
         srcPathList = srcPathList[:frameRange[1]-frameRange[0]]
     sample = cv.imread(srcPathList[0], -1)
     paddingArray = np.zeros_like(sample)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=False)
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=VIDEO_FPS, frameSize=IMG_SIZE, isColor=True)
     for i in range(0, padding[0]):
         writer.write(paddingArray)
     for i in srcPathList:
