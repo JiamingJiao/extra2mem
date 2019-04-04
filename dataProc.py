@@ -40,7 +40,7 @@ class SparsePecg(object):
         dArray[:, :] = d
         for i in range(0, coordinates.shape[0]):
             cv.magnitude((rowIndex - coordinates[i, 0]), (colIndex - coordinates[i, 1]), self.distance[i])
-            cv.magnitude(self.distance[i], d, self.distance[i])
+            cv.magnitude(self.distance[i], dArray, self.distance[i])
         self.pseudoEcg = np.ndarray(coordinates.shape[0], dtype=DATA_TYPE)
         self.diffV = np.ndarray(shape, dtype=DATA_TYPE)
         self.quotient = np.ndarray(shape, dtype=DATA_TYPE)

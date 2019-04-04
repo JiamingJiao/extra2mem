@@ -9,7 +9,7 @@ class ExpPhie(dataProc.Phie):
         csvData = pandas.read_csv(path, skiprows=12, header=None)
         self.raw = np.empty((length, csvData.shape[1]-1), dataProc.DATA_TYPE)
         self.raw[:, :] = csvData.iloc[length, 0:-1]
-        super(extraPhie, self).__init__(coordiantes, 1, length, *args, **kwargs)
+        super(ExpPhie, self).__init__(coordiantes, 1, length, *args, **kwargs)
         
         # set data
         firstRowIndex = np.linspace(0, self.height, num=self.height, endpoint=False, dtype=dataProc.DATA_TYPE)
