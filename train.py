@@ -3,6 +3,7 @@ import cv2 as cv
 import os
 import math
 import datetime
+import pickle
 from copy import deepcopy
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
@@ -77,6 +78,9 @@ class Generator(Networks):
             'uNet3d': self.trainUNet3d,
             'uNet3d5': self.trainUNet3d}
         trainingFunc[self.netg.name]()
+        with open(modelDir+'history', 'wb') as historyFile:
+            pickle.dump(self.history.history, historyFile)
+        print('history has been saved')
         
     def trainUNet(self):
         x = self.pecg.twoD.reshape((self.pecg.groups*self.pecg.length, self.pecg.height, self.pecg.width, self.pecg.channels))

@@ -6,15 +6,15 @@ PECG_CONV_KERNEL[1, :, 0] = 1
 PECG_CONV_KERNEL[:, 1, 0] = 1
 PECG_CONV_KERNEL[1, 1, 0] = -4
 
-def calcPecg(phie, pos_array, conductance):
+def calcPecgSequence(phie, pos_array, conductance):
 	points_num = pos_array.shape[0]
 	dst = np.zeros((phie.shape[0], points_num), np.float32)
 	distance = calcDistance(pos_array, phie.shape[1:])
 	for i, phie_frame in enumerate(phie):
-		dst[i] = calcFramewisePecg(phie_frame, distance, conductance)
+		dst[i] = calcPecgFrame(phie_frame, distance, conductance)
 	return dst
 
-def calcFramewisePecg(phie, distance, conductance):
+def calcPecgFrame(phie, distance, conductance):
 	points_num = distance.shape[0]
 	map_shape = phie.shape
 	diff_v = np.ndarray(map_shape, np.float32)
@@ -24,6 +24,7 @@ def calcFramewisePecg(phie, distance, conductance):
 	for i in range(0, points_num):
 		np.divide(diff_v, distance[i], quotient)
 		dst[i] = np.sum(quotient)
+	# np.multiply(dst, conductance, dst)
 	return dst
 
 def calcDistance(pos_array, map_shape):
