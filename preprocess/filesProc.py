@@ -3,10 +3,9 @@ import os
 import glob
 import sys
 
+import dataProc
+sys.path.append('./preprocess/')
 import pseudoEcg
-import dataProc
-sys.path.append('../')
-import dataProc
 
 def getSimInSubArea(sim_path_list, dst_path, size):
     if not os.path.exists(os.path.join(dst_path, 'phie')):
