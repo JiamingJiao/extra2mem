@@ -175,13 +175,14 @@ class Phie(Data):
         self.ground = None
         self.rnn = None
 
-    def setGround(self, index): # set reference point (ground, phie=0)
-        self.ground = index
-        #np.subtract(self.twoD, self.twoD[:, :, self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD)
-        # Why above line doesn't work?
-        for i, sequence in enumerate(self.twoD):
-            for j, frame in enumerate(sequence):
-                np.subtract(frame, frame[self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD[i, j, :, :, :])
+
+    # def setGround(self, index): # set reference point (ground, phie=0)
+    #     self.ground = index
+    #     #np.subtract(self.twoD, self.twoD[:, :, self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD)
+    #     # Why above line doesn't work?
+    #     for i, sequence in enumerate(self.twoD):
+    #         for j, frame in enumerate(sequence):
+    #             np.subtract(frame, frame[self.coordinates[self.ground, 0], self.coordinates[self.ground, 1], :], out=self.twoD[i, j, :, :, :])
 
     def downSample(self):
         sampled = np.squeeze(self.twoD[:, :, self.coordinates[:, 0], self.coordinates[:, 1], :], 3)
