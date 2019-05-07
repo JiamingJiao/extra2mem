@@ -140,6 +140,73 @@ class Networks(object):
         model = Model(inputs=inputs, outputs=decoder6, name='uNet5')
         return model
 
+    def uNet5_2(self):
+        inputs = Input((self.imgRows, self.imgCols, self.channels)) # 32x32
+        
+        encoder1 = Conv2D(self.gKernels, self.gKernelSize, padding='same', kernel_initializer='he_normal')(inputs)
+        encoder1 = LeakyReLU(alpha=0.2)(encoder1)
+        encoder1 = Conv2D(self.gKernels, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder1)
+        encoder1 = LeakyReLU(alpha=0.2, name='encoder1')(encoder1) # 16x16
+
+        encoder2 = Conv2D(self.gKernels*2, self.gKernelSize, padding='same', kernel_initializer='he_normal')(encoder1)
+        encoder2 = LeakyReLU(alpha=0.2)(encoder2)
+        encoder2 = Conv2D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder2)
+        encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
+        encoder2 = LeakyReLU(alpha=0.2, name='encoder2')(encoder2) # 8x8
+
+        encoder3 = Conv2D(self.gKernels*4, self.gKernelSize, padding='same', kernel_initializer='he_normal')(encoder2)
+        encoder3 = LeakyReLU(alpha=0.2)(encoder3)
+        encoder3 = Conv2D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder3)
+        encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
+        encoder3 = LeakyReLU(alpha=0.2, name='encoder3')(encoder3) # 4x4
+
+        encoder4 = Conv2D(self.gKernels*8, self.gKernelSize, padding='same', kernel_initializer='he_normal')(encoder3)
+        encoder4 = LeakyReLU(alpha=0.2)(encoder4)
+        encoder4 = Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder4)
+        encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
+        encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(encoder4) # 2x2
+
+        encoder5 = Conv2D(self.gKernels*8, self.gKernelSize, padding='same', kernel_initializer='he_normal')(encoder4)
+        encoder5 = LeakyReLU(alpha=0.2)(encoder5)
+        encoder5 = Conv2D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder5)
+        #encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
+        encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(encoder5) # 1x1
+
+        decoder1 = Conv2D(self.gKernels*8, 1, activation='relu', padding='valid', kernel_initializer='he_normal')(encoder5)
+        decoder1 = Conv2D(self.gKernels*8, 1, activation='relu', padding='valid', kernel_initializer='he_normal')(decoder1)
+        decoder1 = UpSampling2D(size=2, name='decoder1')(decoder1) # 2x2
+        decoder1 = Dropout(0.5)(decoder1)
+        connection1 = Concatenate(axis=-1, name='connection1')([decoder1, encoder4])
+
+        decoder2 = Conv2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection1)
+        decoder2 = Conv2D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder2)
+        decoder2 = UpSampling2D(size=2, name='decoder2')(decoder2) # 4x4
+        decoder2 = Dropout(0.5)(decoder2)
+        connection2 = Concatenate(axis=-1, name='connection2')([decoder2, encoder3])
+
+        decoder3 = Conv2D(self.gKernels*4, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection2)
+        decoder3 = Conv2D(self.gKernels*4, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder3)
+        decoder3 = UpSampling2D(size=2, name='decoder3')(decoder3) # 8x8
+        decoder3 = Dropout(0.5)(decoder3)
+        connection3 = Concatenate(axis=-1, name='connection3')([decoder3, encoder2])
+
+        decoder4 = Conv2D(self.gKernels*2, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection3)
+        decoder4 = Conv2D(self.gKernels*2, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder4)
+        decoder4 = UpSampling2D(size=2, name='decoder4')(decoder4) # 16x16
+        #decoder4 = Dropout(0.5)(decoder4)
+        connection4 = Concatenate(axis=-1, name='connection4')([decoder4, encoder1])
+
+        decoder5 = Conv2D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection4)
+        decoder5 = Conv2D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder5)
+        decoder5 = UpSampling2D(size=2, name='decoder5')(decoder5) # 32x32
+        #decoder5 = Dropout(0.5)(decoder5)
+
+        decoder6 = Conv2D(int(self.gKernels/2), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder5)
+        decoder6 = Conv2D(int(self.gKernels/4), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder6)
+        decoder6 = Conv2D(1, self.gKernelSize, activation=self.activationG, padding='same', kernel_initializer='he_normal')(decoder6)
+
+        model = Model(inputs=inputs, outputs=decoder6, name='uNet5_2')
+        return model
 
     def uNet3d(self):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))

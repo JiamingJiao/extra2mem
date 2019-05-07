@@ -37,6 +37,20 @@ def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
         pecg_map = pseudoEcg.interpolate(pecg, elec_pos[:, 0:2], inter_size)
         np.save(os.path.join(dst_pecg_folder, src_path[-14:-4]), pecg_map)
 
+def getBinaryPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size, **find_peaks_args):
+    src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
+    dst_pecg_folder = os.path.join(dst_path, 'pecg_bin')
+    if not os.path.exists(dst_pecg_folder):
+        os.makedirs(dst_pecg_folder)
+    for src_path in src_path_list:
+        phie = np.load(src_path)
+        pecg_no_ref = pseudoEcg.calcPecgSequence(phie, elec_pos, conductance)
+        pecg_ref = pseudoEcg.calcPecgSequence(phie, gnd_pos, conductance)
+        pecg = np.subtract(pecg_no_ref, pecg_ref)
+        pecg_binary = pseudoEcg.binarize(pecg, **find_peaks_args)
+        pecg_map = pseudoEcg.interpolate(pecg_binary, elec_pos[:, 0:2], inter_size)
+        np.save(os.path.join(dst_pecg_folder, src_path[-14:-4]), pecg_map)
+
 def get3dBlocks(src_path, length, return_data=True, save=False, dst_path=None):
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
     array_list = []
@@ -56,3 +70,4 @@ def get3dBlocks(src_path, length, return_data=True, save=False, dst_path=None):
             np.save(os.path.join(dst_path, '%06d'%k), block)
     if return_data:
         return dst
+
