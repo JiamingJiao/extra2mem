@@ -24,7 +24,6 @@ def load(path):
     return dst
 
 def makeLowpassFilter(sampling_rate, length, f_cut, order):
-    time = np.arange(length) / sampling_rate
     w = f_cut / (sampling_rate/2)
     b, a = signal.butter(order, w, 'lowpass')
     return b, a

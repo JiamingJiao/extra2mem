@@ -1,6 +1,7 @@
 import numpy as np
 import cv2 as cv
 import scipy.interpolate
+import scipy.signal as signal
 
 import dataProc
 
@@ -67,4 +68,14 @@ def interpolate(data, pos_array, size):
     dst = np.zeros((data.shape[0], size[0], size[1], 1), data.dtype)
     for k, frame in enumerate(data):
         dst[k, :, :, 0] = scipy.interpolate.griddata(pos_array, frame, grid, method='nearest')
+    return dst
+
+def binarize(src, **find_peaks_args):
+    dst = np.zeros_like(src, src.dtype)
+    dst[:, :] = 0.5
+    for k in range(src.shape[-1]):
+        peaks, _ = signal.find_peaks(src[..., k], **find_peaks_args)
+        dst[peaks, k] = 1
+        valleys, _ = signal.find_peaks(-src[..., k], **find_peaks_args)
+        dst[valleys, k] = 0
     return dst

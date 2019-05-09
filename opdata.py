@@ -5,17 +5,21 @@ import scipy.signal as signal
 import glob
 import os
 import matplotlib.cm
+import sys
 
 import dataProc
+sys.path.append('./preprocess/')
+import ecg
 
 class OpVmem(dataProc.Vmem):
-    def __init__(self, path, rawSize, roiOrigin, roiSize, *args, **kwargs):
+    def __init__(self, path, rawSize, roi, sampling_rate=1000, *args, **kwargs):
         pathList = sorted(glob.glob(os.path.join(path, '*.raww')))
         self.raw = np.zeros((len(pathList), rawSize[0]*rawSize[1]), np.uint16)
+        self.sampling_rate = sampling_rate
         for i, path in enumerate(pathList):
             self.raw[i, :] = np.fromfile(path, np.uint16)
         self.raw = self.raw.reshape(((len(pathList),) + rawSize + (1,)))
-        self.raw = self.raw[:, roiOrigin[0]:roiOrigin[0]+roiSize[0], roiOrigin[1]:roiOrigin[1]+roiSize[1]]
+        self.raw = self.raw[:, roi[0]:roi[2], roi[1]:roi[3]]
         self.raw = self.raw.astype(np.float32)
         self.vmem = np.zeros_like(self.raw, np.float32)
 
@@ -28,7 +32,7 @@ class OpVmem(dataProc.Vmem):
 
         self.colorMap = None
 
-        super(OpVmem, self).__init__(1, len(pathList), roiSize[0], roiSize[1], *args, **kwargs)
+        super(OpVmem, self).__init__(1, len(pathList), roi[2]-roi[0], roi[3]-roi[1], *args, **kwargs)
 
         self.kernel = None
     
@@ -43,22 +47,18 @@ class OpVmem(dataProc.Vmem):
             cv.medianBlur(frame, kernelSize, frame)
         '''
 
-    def temporalFilter(self, cutFreq, kernelSize, sigma):
-        # low pass Gaussian
-        print('Apply spatial filter before use temporal filter!')
-        if not sigma > 0:
-            sigma = 0.3*((kernelSize-1)*0.5 - 1) + 0.8 # same as opencv
-        gaussian_kernel = signal.gaussian(kernelSize, sigma)
-        kernel = np.zeros(self.length, np.float32)
-        halfSize = kernelSize // 2
-        kernel[0:cutFreq-halfSize] = 1
-        kernel[-cutFreq+halfSize: ] = 1
-        kernel[cutFreq-halfSize:cutFreq+1] = gaussian_kernel[halfSize:]
-        kernel[self.length-cutFreq-1: self.length-cutFreq+halfSize] = gaussian_kernel[0:halfSize+1]
-        self.kernel = kernel[:, np.newaxis, np.newaxis, np.newaxis]
-        f = fftpack.fft(self.vmem, axis=0)
-        f_filtered = np.multiply(f, self.kernel)
-        self.vmem = np.abs(fftpack.ifft(f_filtered, axis=0), dtype=np.float32)
+    def temporalFilter(self, fcl, fch, order):
+        # # lowpass butterworth
+        # b, a = ecg.makeLowpassFilter(self.sampling_rate, self.length, fcl, order_l)
+        # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+        # # highpass butterworth
+        # wc = fch / (self.sampling_rate/2)
+        # b, a = signal.butter(order_h, w, 'highpass')
+        # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+        wcl = fcl / (self.sampling_rate/2)
+        wch = fch / (self.sampling_rate/2)
+        b, a = signal.butter(order, (wcl, wch), 'bandpass')
+        self.vmem = signal.filtfilt(b, a, self.vmem, 0)
     
     def setColor(self, cmap='inferno'):
         mapper = matplotlib.cm.ScalarMappable(cmap=cmap)
