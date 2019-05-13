@@ -9,7 +9,7 @@ sys.path.append('./preprocess/')
 import pseudoEcg
 import rotate
 
-def getSimInSubArea(sim_path_list, dst_path, size):
+def getSimInSubArea(sim_path_list, dst_path, size, angle=0):
     if not os.path.exists(os.path.join(dst_path, 'phie')):
         os.makedirs(os.path.join(dst_path, 'phie'))
     if not os.path.exists(os.path.join(dst_path, 'vmem')):
@@ -19,12 +19,15 @@ def getSimInSubArea(sim_path_list, dst_path, size):
         phie = dataProc.loadData(src_phie_path)
         src_vmem_path = os.path.join(sim_path, 'vmem_')
         vmem = dataProc.loadData(src_vmem_path)
-        for i in range(0, phie.shape[1]-size[0], size[0]): # rows
-            for j in range(0, phie.shape[1]-size[1], size[1]): #columns
-                dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%03d_%03d'%(k, i, j))
-                np.save(dst_phie_path, phie[:, i:i+size[0], j:j+size[1], :])
-                dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%03d_%03d'%(k, i, j))
-                np.save(dst_vmem_path, vmem[:, i:i+size[0], j:j+size[1], :])
+        if angle == 90:
+            phie = np.transpose(phie, (0, 2, 1, 3))
+            vmem = np.transpose(vmem, (0, 2, 1, 3))
+        for i in range(0, phie.shape[0]-size, size): # rows
+            for j in range(0, phie.shape[1]-size, size): #columns
+                dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
+                np.save(dst_phie_path, phie[:, i:i+size, j:j+size, :])
+                dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
+                np.save(dst_vmem_path, vmem[:, i:i+size, j:j+size, :])
 
 def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, inter_flag):
     assert angle>-90 and angle<90, 'angle must be between -90 and 90'
@@ -75,7 +78,6 @@ def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, inter_flag):
                 np.save(dst_phie_path, phie_rotated[:, i:i+size, j:j+size, :])
                 dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
                 np.save(dst_vmem_path, vmem_rotated[:, i:i+size, j:j+size, :])
-    return phie_rotated, vmem_rotated
 
 def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
     src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
