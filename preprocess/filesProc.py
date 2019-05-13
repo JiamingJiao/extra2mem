@@ -2,10 +2,12 @@ import numpy as np
 import os
 import glob
 import sys
+import cv2 as cv
 
 import dataProc
 sys.path.append('./preprocess/')
 import pseudoEcg
+import rotate
 
 def getSimInSubArea(sim_path_list, dst_path, size):
     if not os.path.exists(os.path.join(dst_path, 'phie')):
@@ -23,6 +25,57 @@ def getSimInSubArea(sim_path_list, dst_path, size):
                 np.save(dst_phie_path, phie[:, i:i+size[0], j:j+size[1], :])
                 dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%03d_%03d'%(k, i, j))
                 np.save(dst_vmem_path, vmem[:, i:i+size[0], j:j+size[1], :])
+
+def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, inter_flag):
+    assert angle>-90 and angle<90, 'angle must be between -90 and 90'
+    if not os.path.exists(os.path.join(dst_path, 'phie')):
+        os.makedirs(os.path.join(dst_path, 'phie'))
+    if not os.path.exists(os.path.join(dst_path, 'vmem')):
+        os.makedirs(os.path.join(dst_path, 'vmem'))
+    for k, sim_path in enumerate(sim_path_list):
+        src_phie_path = os.path.join(sim_path, 'phie_')
+        phie = dataProc.loadData(src_phie_path)
+        padding_size = int(0.25*phie.shape[1])
+        padding_array = ( (0, 0), (padding_size,)*2, (padding_size,)*2, (0, 0))
+        phie_padded = np.pad(phie, padding_array, 'constant')
+
+        src_vmem_path = os.path.join(sim_path, 'vmem_')
+        vmem = dataProc.loadData(src_vmem_path)
+        vmem_padded = np.pad(vmem, padding_array, 'constant')
+
+        phie_rotated = np.zeros_like(phie_padded)
+        vmem_rotated = np.zeros_like(vmem_padded)
+        trans_mat = cv.getRotationMatrix2D((phie_rotated.shape[1]//2,)*2, angle, 1)
+        for (phie_frame, phie_r_frame, vmem_frame, vmem_r_frame) in zip(phie_padded, phie_rotated, vmem_padded, vmem_rotated):
+            cv.warpAffine(phie_frame, trans_mat, phie_frame.shape[0:2], phie_r_frame, inter_flag)
+            cv.warpAffine(vmem_frame, trans_mat, vmem_frame.shape[0:2], vmem_r_frame, inter_flag)
+
+        contour = rotate.getContour(padding_size, padding_size+phie.shape[1])
+        contour_rotated = rotate.rotateContour(contour, angle, phie_padded.shape[1])
+        contour_rotated = contour_rotated.reshape(contour_rotated.shape[0]*contour_rotated.shape[1], 2, 1)
+
+        top_contour_idx = np.argmin(contour_rotated[:, 0, 0])
+        top_contour_i = contour_rotated[top_contour_idx, 0, 0]
+        top_contour_j = contour_rotated[top_contour_idx, 1, 0]
+
+        if angle < 0:
+            acute_angle = angle + 90
+        else:
+            acute_angle = angle
+        rad = acute_angle*np.pi/180
+        inscribed_square_size = phie.shape[1] / (np.sin(rad) + np.cos(rad))
+
+        i_start = int(top_contour_i + inscribed_square_size*np.cos(rad)*np.sin(rad))
+        j_start = int(top_contour_j - inscribed_square_size*np.cos(rad)**2)
+        i_end = int(i_start + inscribed_square_size)
+        j_end = int(j_start + inscribed_square_size)
+        for i in range(i_start, i_end-size, size): # rows
+            for j in range(j_start, j_end-size, size): # columns
+                dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
+                np.save(dst_phie_path, phie_rotated[:, i:i+size, j:j+size, :])
+                dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
+                np.save(dst_vmem_path, vmem_rotated[:, i:i+size, j:j+size, :])
+    return phie_rotated, vmem_rotated
 
 def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
     src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
