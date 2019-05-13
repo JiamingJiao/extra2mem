@@ -22,8 +22,8 @@ def getSimInSubArea(sim_path_list, dst_path, size, angle=0):
         if angle == 90:
             phie = np.transpose(phie, (0, 2, 1, 3))
             vmem = np.transpose(vmem, (0, 2, 1, 3))
-        for i in range(0, phie.shape[0]-size, size): # rows
-            for j in range(0, phie.shape[1]-size, size): #columns
+        for i in range(0, phie.shape[1]-size, size): # rows
+            for j in range(0, phie.shape[2]-size, size): #columns
                 dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
                 np.save(dst_phie_path, phie[:, i:i+size, j:j+size, :])
                 dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
@@ -90,7 +90,7 @@ def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
         pecg_ref = pseudoEcg.calcPecgSequence(phie, gnd_pos, conductance)
         pecg = np.subtract(pecg_no_ref, pecg_ref)
         pecg_map = pseudoEcg.interpolate(pecg, elec_pos[:, 0:2], inter_size)
-        np.save(os.path.join(dst_pecg_folder, src_path[-14:-4]), pecg_map)
+        np.save(os.path.join(dst_pecg_folder, src_path.split('/')[-1][:-4]), pecg_map)
 
 def getBinaryPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size, **find_peaks_args):
     src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
@@ -104,7 +104,7 @@ def getBinaryPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size
         pecg = np.subtract(pecg_no_ref, pecg_ref)
         pecg_binary = pseudoEcg.binarize(pecg, **find_peaks_args)
         pecg_map = pseudoEcg.interpolate(pecg_binary, elec_pos[:, 0:2], inter_size)
-        np.save(os.path.join(dst_pecg_folder, src_path[-14:-4]), pecg_map)
+        np.save(os.path.join(dst_pecg_folder, src_path.split('/')[-1][:-4]), pecg_map)
 
 def get3dBlocks(src_path, length, return_data=True, save=False, dst_path=None):
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
