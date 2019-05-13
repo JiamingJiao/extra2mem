@@ -47,18 +47,28 @@ class OpVmem(dataProc.Vmem):
             cv.medianBlur(frame, kernelSize, frame)
         '''
 
-    def temporalFilter(self, fcl, fch, order):
-        # # lowpass butterworth
-        # b, a = ecg.makeLowpassFilter(self.sampling_rate, self.length, fcl, order_l)
-        # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
-        # # highpass butterworth
-        # wc = fch / (self.sampling_rate/2)
-        # b, a = signal.butter(order_h, w, 'highpass')
-        # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
-        wcl = fcl / (self.sampling_rate/2)
-        wch = fch / (self.sampling_rate/2)
-        b, a = signal.butter(order, (wcl, wch), 'bandpass')
-        self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+    # def temporalFilter(self, fcl, fch, order):
+    #     # # lowpass butterworth
+    #     # b, a = ecg.makeLowpassFilter(self.sampling_rate, self.length, fcl, order_l)
+    #     # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+    #     # # highpass butterworth
+    #     # wc = fch / (self.sampling_rate/2)
+    #     # b, a = signal.butter(order_h, w, 'highpass')
+    #     # self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+    #     wcl = fcl / (self.sampling_rate/2)
+    #     wch = fch / (self.sampling_rate/2)
+    #     b, a = signal.butter(order, (wcl, wch), 'bandpass')
+    #     self.vmem = signal.filtfilt(b, a, self.vmem, 0)
+
+    def temporalFilter(self, kernel_size, sigma):
+        assert kernel_size%2==1, 'kernel size must be a odd number' 
+        padding_size = kernel_size//2
+        padded = np.pad(self.vmem, ((padding_size, padding_size), (0, 0), (0, 0), (0, 0)), 'edge')
+        kernel = np.ones((kernel_size, 1, 1, 1), dtype=np.float32) / kernel_size
+        # if not sigma > 0:
+        #     sigma = 0.3*((kernel_size-1)*0.5 - 1) + 0.8 # same as opencv
+        # kernel = signal.gaussian(kernel_size, sigma)[:, np.newaxis, np.newaxis, np.newaxis]
+        self.vmem = signal.convolve(padded, kernel, 'valid')
     
     def setColor(self, cmap='inferno'):
         mapper = matplotlib.cm.ScalarMappable(cmap=cmap)
