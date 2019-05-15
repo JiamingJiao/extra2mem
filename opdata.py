@@ -12,8 +12,11 @@ sys.path.append('./preprocess/')
 import ecg
 
 class OpVmem(dataProc.Vmem):
-    def __init__(self, path, rawSize, roi, sampling_rate=1000, *args, **kwargs):
+    def __init__(self, path, rawSize, roi, sampling_rate=1000, start=0, end=0, *args, **kwargs):
         pathList = sorted(glob.glob(os.path.join(path, '*.raww')))
+        if not end>0:
+            end = len(pathList)
+        pathList = pathList[start:end] 
         self.raw = np.zeros((len(pathList), rawSize[0]*rawSize[1]), np.uint16)
         self.sampling_rate = sampling_rate
         for i, path in enumerate(pathList):
@@ -68,13 +71,24 @@ class OpVmem(dataProc.Vmem):
         # if not sigma > 0:
         #     sigma = 0.3*((kernel_size-1)*0.5 - 1) + 0.8 # same as opencv
         # kernel = signal.gaussian(kernel_size, sigma)[:, np.newaxis, np.newaxis, np.newaxis]
-        self.vmem = signal.convolve(padded, kernel, 'valid')
+        if self.height>320 or self.width>320: # In the case of RAM is insufficient
+            for i in range(0, self.height):
+                self.vmem[:, i, :, :] = signal.convolve(padded[:, i, :, :], kernel[..., 0], 'valid')
+        else:
+            self.vmem = signal.convolve(padded, kernel, 'valid')
+        self.vmem, _, _ = dataProc.normalize(self.vmem)
     
     def setColor(self, cmap='inferno'):
         mapper = matplotlib.cm.ScalarMappable(cmap=cmap)
         self.colorMap = np.empty((self.length, self.height, self.width, 4), np.float32)
         for i, frame in enumerate(self.vmem[:, :, :, 0]):
             self.colorMap[i] = mapper.to_rgba(frame, norm=False)
+
+    def resize(self, dsize):
+        resized = np.zeros((self.vmem.shape[0], dsize[0], dsize[1], 1), self.vmem.dtype)
+        for src_frame, dst_frame in zip(self.vmem, resized):
+            cv.resize(src_frame, dsize, dst_frame, interpolation=cv.INTER_AREA)
+        self.vmem = resized
 
 def findPeak(src, pos_array):
     dst = []
