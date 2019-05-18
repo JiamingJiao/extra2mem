@@ -25,9 +25,9 @@ def filterEcg(src, sampling_rate, fc_low, order_low, fc_notch_list, sigma_list):
     dst = fftpack.ifft(filtered_f, axis=0).real.astype(np.float32)
     return dst
 
-def load(path, start, end, **read_scv_kwargs):
+def load(path, start, end, **read_csv_kwargs):
     file_name = glob.glob(os.path.join(path, '*csv'))[0]
-    csv_data = pandas.read_csv(file_name, skiprows=12, header=None, **read_scv_kwargs)
+    csv_data = pandas.read_csv(file_name, skiprows=12, header=None, **read_csv_kwargs)
     trigger = np.array(csv_data.iloc[0:-1, 2])
     triggered_idx = np.argmax(trigger<-5)
     dst = -np.array(csv_data.iloc[triggered_idx+start:triggered_idx+start+end, 3:-1])
@@ -48,4 +48,12 @@ def makeNotchFilter(pos_list, sigma_list, length):
         one_notch = kernel[pos-ksize//2:pos+ksize//2+1]
         kernel[pos-ksize//2:pos+ksize//2+1] = np.minimum(one_notch, gaussian_kernel)
     dst = np.concatenate((kernel, np.flip(kernel, 0)))[:, np.newaxis]
+    return dst
+
+def notchFilter(src, sampling_rate, notch_list, sigma_list):
+    notch_pos_list = [int(notch*src.shape[0]/sampling_rate) for notch in notch_list]
+    filter_notch_f = makeNotchFilter(notch_pos_list, sigma_list, src.shape[0])
+    src_f = fftpack.fft(src, axis=0)
+    filtered_f = np.multiply(src_f, filter_notch_f)
+    dst = fftpack.ifft(filtered_f, axis=0).real.astype(np.float32)
     return dst
