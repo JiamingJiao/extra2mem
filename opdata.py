@@ -68,14 +68,13 @@ class OpVmem(dataProc.Vmem):
         padding_size = kernel_size//2
         padded = np.pad(self.vmem, ((padding_size, padding_size), (0, 0), (0, 0), (0, 0)), 'edge')
         kernel = np.ones((kernel_size, 1, 1, 1), dtype=np.float32) / kernel_size
-        # if not sigma > 0:
-        #     sigma = 0.3*((kernel_size-1)*0.5 - 1) + 0.8 # same as opencv
-        # kernel = signal.gaussian(kernel_size, sigma)[:, np.newaxis, np.newaxis, np.newaxis]
-        if self.height>320 or self.width>320: # In the case of RAM is insufficient
-            for i in range(0, self.height):
-                self.vmem[:, i, :, :] = signal.convolve(padded[:, i, :, :], kernel[..., 0], 'valid')
-        else:
-            self.vmem = signal.convolve(padded, kernel, 'valid')
+        # if self.height>320 or self.width>320: # In the case of RAM is insufficient
+        #     for i in range(0, self.height):
+        #         self.vmem[:, i, :, :] = signal.convolve(padded[:, i, :, :], kernel[..., 0], 'valid')
+        # else:
+        #     self.vmem = signal.convolve(padded, kernel, 'valid')
+        # kernel = np.ones((kernel_size), dtype=np.float32) / kernel_size
+        self.vmem = signal.fftconvolve(padded, kernel, 'valid', 0)
         self.vmem, _, _ = dataProc.normalize(self.vmem)
     
     def setColor(self, cmap='inferno'):
