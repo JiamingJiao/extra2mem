@@ -1,22 +1,20 @@
 import numpy as np
 import cv2 as cv
-import scipy.fftpack as fftpack
+# import scipy.fftpack as fftpack
 import scipy.signal as signal
 import glob
 import os
 import matplotlib.cm
-import sys
 
 import dataProc
-sys.path.append('./preprocess/')
-import ecg
+
 
 class OpVmem(dataProc.Vmem):
     def __init__(self, path, rawSize, roi, sampling_rate=1000, start=0, end=0, *args, **kwargs):
         pathList = sorted(glob.glob(os.path.join(path, '*.raww')))
         if not end>0:
             end = len(pathList)
-        pathList = pathList[start:end] 
+        pathList = pathList[start:end]
         self.raw = np.zeros((len(pathList), rawSize[0]*rawSize[1]), np.uint16)
         self.sampling_rate = sampling_rate
         for i, path in enumerate(pathList):
@@ -38,11 +36,11 @@ class OpVmem(dataProc.Vmem):
         super(OpVmem, self).__init__(1, len(pathList), roi[2]-roi[0], roi[3]-roi[1], *args, **kwargs)
 
         self.kernel = None
-    
+
     def spatialFilter(self, kernelSize, sigma):
         
         if not sigma > 0:
-            sigma = 0.3*((kernelSize-1)*0.5 - 1) + 0.8 # same as opencv
+            sigma = 0.3*((kernelSize-1)*0.5 - 1) + 0.8  # same as opencv
         for frame in self.vmem:
             cv.GaussianBlur(frame, (kernelSize, kernelSize), sigma, frame, sigma, cv.BORDER_REPLICATE)
         '''
@@ -64,7 +62,7 @@ class OpVmem(dataProc.Vmem):
     #     self.vmem = signal.filtfilt(b, a, self.vmem, 0)
 
     def temporalFilter(self, kernel_size, sigma):
-        assert kernel_size%2==1, 'kernel size must be a odd number' 
+        assert kernel_size%2==1, 'kernel size must be a odd number'
         padding_size = kernel_size//2
         padded = np.pad(self.vmem, ((padding_size, padding_size), (0, 0), (0, 0), (0, 0)), 'edge')
         kernel = np.ones((kernel_size, 1, 1, 1), dtype=np.float32) / kernel_size
@@ -76,7 +74,7 @@ class OpVmem(dataProc.Vmem):
         # kernel = np.ones((kernel_size), dtype=np.float32) / kernel_size
         self.vmem = signal.fftconvolve(padded, kernel, 'valid', 0)
         self.vmem, _, _ = dataProc.normalize(self.vmem)
-    
+
     def setColor(self, cmap='inferno'):
         mapper = matplotlib.cm.ScalarMappable(cmap=cmap)
         self.colorMap = np.empty((self.length, self.height, self.width, 4), np.float32)
@@ -88,6 +86,7 @@ class OpVmem(dataProc.Vmem):
         for src_frame, dst_frame in zip(self.vmem, resized):
             cv.resize(src_frame, dsize, dst_frame, interpolation=cv.INTER_AREA)
         self.vmem = resized
+
 
 def findPeak(src, pos_array):
     dst = []
