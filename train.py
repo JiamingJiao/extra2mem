@@ -1,32 +1,30 @@
 import numpy as np
-import cv2 as cv
 import os
-import math
 import datetime
 import pickle
-from copy import deepcopy
 from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 import dataProc
 import utils
-from model import Networks, Gan
+from model import Networks
 from analysis import calculateMae
+
 
 class Generator(Networks):
     def __init__(self, netgName, batchSize=10, **networksArgs):
         super(Generator, self).__init__(**networksArgs)
         getModel = {'uNet': self.uNet,
-            'uNet5': self.uNet5,
-            'convLstm': self.convLstm,
-            'uNet3d': self.uNet3d,
-            'convLstm5': self.convLstm5,
-            'seqConv5': self.seqConv5,
-            'uNet3d5': self.uNet3d5}
+                    'uNet5': self.uNet5,
+                    'convLstm': self.convLstm,
+                    'uNet3d': self.uNet3d,
+                    'convLstm5': self.convLstm5,
+                    'seqConv5': self.seqConv5,
+                    'uNet3d5': self.uNet3d5}
         self.netg = getModel[netgName]()
         self.netg.summary()
         self.batchSize = batchSize
-        self.dataRange = [0.0]*4 # minPecg, maxPecg, minVmem, maxVmem
+        self.dataRange = [0.0]*4  # minPecg, maxPecg, minVmem, maxVmem
         self.checkpointer = None
         self.earlyStopping = None
         self.learningRate = None
@@ -41,28 +39,29 @@ class Generator(Networks):
         self.truth = None
 
     def train(self, pecg, vmem, learningRateG=1e-4, lossFuncG='mae', continueTrain=False, pretrainedModelPath=None,
-    modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2, constantLearningRate=False):
+              modelDir=None, earlyStoppingPatience=10, epochsNum=200, valSplit=0.2, constantLearningRate=False):
         self.pecg = pecg
         self.vmem = vmem
         self.epochsNum = epochsNum
         self.valSplit = valSplit
         self.netg.compile(optimizer=Adam(lr=learningRateG), loss=lossFuncG, metrics=[lossFuncG])
-        if continueTrain == True:
+        if continueTrain:
             self.netg.load_weights(pretrainedModelPath)
         if not os.path.exists(modelDir):
             os.makedirs(modelDir)
-        self.checkpointer = ModelCheckpoint(os.path.join(modelDir, 'netg.h5'), monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True, mode='min')
+        self.checkpointer = ModelCheckpoint(os.path.join(modelDir, 'netg.h5'), monitor='val_mean_absolute_error', verbose=1, save_best_only=True, save_weights_only=True,
+                                            mode='min')
         self.learningRate = ReduceLROnPlateau('val_mean_absolute_error', 0.1, earlyStoppingPatience, 1, 'auto', 1e-4, min_lr=learningRateG*1e-4)
-        if constantLearningRate==True:
+        if constantLearningRate:
             self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience, verbose=1)
             self.callbacks = [self.checkpointer, self.earlyStopping]
         else:
             self.earlyStopping = EarlyStopping(patience=earlyStoppingPatience*5, verbose=1)
             self.callbacks = [self.checkpointer, self.earlyStopping, self.learningRate]
-        #self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
-        #self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
-        #self.pecg.setData2(pecgDirList)
-        #self.vmem.setData2(vmemDirList)
+        # self.pecg = dataProc.Phie(None, len(pecgDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
+        # self.vmem = dataProc.Vmem(len(vmemDirList), length, self.rawSize[0], self.rawSize[1], self.channels)
+        # self.pecg.setData2(pecgDirList)
+        # self.vmem.setData2(vmemDirList)
         self.pecg.normalize()
         self.vmem.normalize()
         self.dataRange = self.pecg.range + self.vmem.range
@@ -86,7 +85,7 @@ class Generator(Networks):
         x = self.pecg.twoD.reshape((self.pecg.groups*self.pecg.length, self.pecg.height, self.pecg.width, self.pecg.channels))
         y = self.vmem.twoD.reshape((self.vmem.groups*self.vmem.length, self.vmem.height, self.vmem.width, self.vmem.channels))
         self.history = self.netg.fit(x=x, y=y, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
+                                     callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
 
     def trainConvLstm(self):
         self.pecg.setRnnData(self.temporalDepth)
@@ -96,15 +95,15 @@ class Generator(Networks):
         trainGenerator = utils.generatorRnn(self.pecg.train, self.vmem.train, self.batchSize)
         valGenerator = utils.generatorRnn(self.pecg.val, self.vmem.val, self.batchSize)
         self.history = self.netg.fit_generator(trainGenerator, epochs=self.epochsNum, verbose=2, callbacks=self.callbacks,
-        validation_data=valGenerator, use_multiprocessing=True)
+                                               validation_data=valGenerator, use_multiprocessing=True)
 
     def trainSeqConv5(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
+                                     callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
 
     def trainUNet3d(self):
         self.history = self.netg.fit(x=self.pecg.twoD, y=self.vmem.twoD, batch_size=self.batchSize, epochs=self.epochsNum, verbose=2,
-        callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
+                                     callbacks=self.callbacks, validation_split=self.valSplit, shuffle=True)
 
     def predict(self, pecg, dstDir, trueVmem, modelDir, batchSize=16):
         self.netg.load_weights(modelDir)
@@ -119,9 +118,9 @@ class Generator(Networks):
         }
         predictionFunc[self.netg.name](trueVmem)
         self.prediction.twoD = dataProc.scale(self.prediction.twoD, (0, 1), dstRange=self.dataRange[2:])
-        if not dstDir == None:
+        if dstDir is not None:
             self.prediction.saveData2(dstDir, 'vmem')
-        mae,stdError = calculateMae(self.prediction.twoD, self.truth.twoD)
+        mae, stdError = calculateMae(self.prediction.twoD, self.truth.twoD)
         print('mae is %f, std_error is %f'%(mae, stdError))
         return mae, stdError
 
@@ -148,6 +147,7 @@ class Generator(Networks):
         self.prediction = dataProc.Data(*self.pecg.twoD.shape)
         self.prediction.twoD = y.reshape(self.prediction.twoD.shape)
         self.truth = trueVmem
+
 
 # ((number of training samples*validation split ratio)/batch size) should be an integer
 '''
@@ -193,7 +193,7 @@ trainingRatio=5, epochsNum=100, earlyStoppingPatience=10, batchSize=10, valSplit
         lossRecorder[lossCounter, 0] = lossA[0]
         lossRecorder[lossCounter, 1] = lossVal[0]
         lossCounter += 1
-        if (minLossG > lossVal[0]):                
+        if (minLossG > lossVal[0]):
             gan.netG.save_weights(weightsGPath, overwrite=True)
             gan.netD.save_weights(weightsDPath, overwrite=True)
             minLossG = lossVal[0]
@@ -244,6 +244,7 @@ activationG='relu', lossFuncG='mae', temporalDepth=None, gKernels=64, gKernelSiz
             cv.imwrite(pngDir+'%06d.png'%i, resizedPng)
 '''
 
+
 def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
     lossValStr = ' - lossVal: ' + '%.6f'%lossVal[0]
     lossDStr = ' - lossD: ' + lossD[0].astype(np.str) + ' '
@@ -256,5 +257,5 @@ def displayLoss(lossD, lossA, lossVal, beginingTime, epoch):
     endTime = datetime.datetime.now()
     trainingTime = endTime - beginingTime
     msg = ' - %d'%trainingTime.total_seconds() + 's' + ' - epoch: ' + '%d '%(epoch) + lossDStr + lossDOnRealStr + lossDOnFakeStr \
-    + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
+          + lossDOnPenalty + lossAStr + lossGStr + lossDInA + lossValStr
     print(msg)

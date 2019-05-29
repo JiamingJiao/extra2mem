@@ -9,7 +9,26 @@ import pseudoEcg
 import rotate
 
 
-def getSimInSubArea(sim_path_list, dst_path, size, angle=0):
+def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, src_size=200, inter_flag=cv.INTER_LINEAR):
+    assert angle>-360 and angle<360, 'angle must be between -360 and 360'
+    if angle<0:
+        angle_p = angle + 360
+    else:
+        angle_p = angle
+    angle_acute = angle_p % 90
+
+    padding_size = int(0.25*src_size)
+    padding_array = ((0, 0), (padding_size,)*2, (padding_size,)*2, (0, 0))
+    contour = rotate.getContour(padding_size, padding_size+src_size)
+    contour_rotated = rotate.rotateContour(contour, angle, 2*padding_size+src_size)
+    top_contour_i, top_contour_j = contour_rotated[angle_p//90, -1, :, 0]
+    rad = angle_acute*np.pi/180
+    inscribed_square_size = src_size / (np.sin(rad) + np.cos(rad))
+    i_start = int(top_contour_i + inscribed_square_size*np.cos(rad)*np.sin(rad))
+    j_start = int(top_contour_j - inscribed_square_size*np.cos(rad)**2)
+    i_end = int(i_start + inscribed_square_size)
+    j_end = int(j_start + inscribed_square_size)
+
     if not os.path.exists(os.path.join(dst_path, 'phie')):
         os.makedirs(os.path.join(dst_path, 'phie'))
     if not os.path.exists(os.path.join(dst_path, 'vmem')):
@@ -17,30 +36,6 @@ def getSimInSubArea(sim_path_list, dst_path, size, angle=0):
     for k, sim_path in enumerate(sim_path_list):
         src_phie_path = os.path.join(sim_path, 'phie_')
         phie = dataProc.loadData(src_phie_path)
-        src_vmem_path = os.path.join(sim_path, 'vmem_')
-        vmem = dataProc.loadData(src_vmem_path)
-        if angle == 90:
-            phie = np.transpose(phie, (0, 2, 1, 3))
-            vmem = np.transpose(vmem, (0, 2, 1, 3))
-        for i in range(0, phie.shape[1]-size, size):  # rows
-            for j in range(0, phie.shape[2]-size, size):  # columns
-                dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
-                np.save(dst_phie_path, phie[:, i:i+size, j:j+size, :])
-                dst_vmem_path = os.path.join(dst_path, 'vmem', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
-                np.save(dst_vmem_path, vmem[:, i:i+size, j:j+size, :])
-
-
-def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, inter_flag):
-    assert angle>-90 and angle<90, 'angle must be between -90 and 90'
-    if not os.path.exists(os.path.join(dst_path, 'phie')):
-        os.makedirs(os.path.join(dst_path, 'phie'))
-    if not os.path.exists(os.path.join(dst_path, 'vmem')):
-        os.makedirs(os.path.join(dst_path, 'vmem'))
-    for k, sim_path in enumerate(sim_path_list):
-        src_phie_path = os.path.join(sim_path, 'phie_')
-        phie = dataProc.loadData(src_phie_path)
-        padding_size = int(0.25*phie.shape[1])
-        padding_array = ((0, 0), (padding_size,)*2, (padding_size,)*2, (0, 0))
         phie_padded = np.pad(phie, padding_array, 'constant')
 
         src_vmem_path = os.path.join(sim_path, 'vmem_')
@@ -54,25 +49,6 @@ def getRotatedSimInSubArea(sim_path_list, dst_path, size, angle, inter_flag):
             cv.warpAffine(phie_frame, trans_mat, phie_frame.shape[0:2], phie_r_frame, inter_flag)
             cv.warpAffine(vmem_frame, trans_mat, vmem_frame.shape[0:2], vmem_r_frame, inter_flag)
 
-        contour = rotate.getContour(padding_size, padding_size+phie.shape[1])
-        contour_rotated = rotate.rotateContour(contour, angle, phie_padded.shape[1])
-        contour_rotated = contour_rotated.reshape(contour_rotated.shape[0]*contour_rotated.shape[1], 2, 1)
-
-        top_contour_idx = np.argmin(contour_rotated[:, 0, 0])
-        top_contour_i = contour_rotated[top_contour_idx, 0, 0]
-        top_contour_j = contour_rotated[top_contour_idx, 1, 0]
-
-        if angle < 0:
-            acute_angle = angle + 90
-        else:
-            acute_angle = angle
-        rad = acute_angle*np.pi/180
-        inscribed_square_size = phie.shape[1] / (np.sin(rad) + np.cos(rad))
-
-        i_start = int(top_contour_i + inscribed_square_size*np.cos(rad)*np.sin(rad))
-        j_start = int(top_contour_j - inscribed_square_size*np.cos(rad)**2)
-        i_end = int(i_start + inscribed_square_size)
-        j_end = int(j_start + inscribed_square_size)
         for i in range(i_start, i_end-size, size):  # rows
             for j in range(j_start, j_end-size, size):  # columns
                 dst_phie_path = os.path.join(dst_path, 'phie', '%02d_%02d_%03d_%03d'%(angle, k, i, j))
