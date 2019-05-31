@@ -10,6 +10,7 @@ PECG_CONV_KERNEL[1, :, 0] = 1
 PECG_CONV_KERNEL[:, 1, 0] = 1
 PECG_CONV_KERNEL[1, 1, 0] = -4
 
+
 def calcPecgSequence(phie, pos_array, conductance):
     points_num = pos_array.shape[0]
     dst = np.zeros((phie.shape[0], points_num), np.float32)
@@ -17,6 +18,7 @@ def calcPecgSequence(phie, pos_array, conductance):
     for i, phie_frame in enumerate(phie):
         dst[i] = calcPecgFrame(phie_frame, distance, conductance)
     return dst
+
 
 def calcPecgFrame(phie, distance, conductance):
     points_num = distance.shape[0]
@@ -31,6 +33,7 @@ def calcPecgFrame(phie, distance, conductance):
     # np.multiply(dst, conductance, dst)
     return dst
 
+
 def calcDistance(pos_array, map_shape):
     map_xy = np.array(makeGrid(map_shape), np.float32)
     map_xy = np.swapaxes(map_xy, 0, 2)
@@ -42,11 +45,13 @@ def calcDistance(pos_array, map_shape):
         dst[i, :, :, 0] = np.linalg.norm(pos-map_xyz, axis=2)
     return dst
 
+
 def makePosArray(electrodes_pos, z):
     dst = np.zeros((electrodes_pos.shape[0], 3), np.uint16)
     dst[:, 0:2] = electrodes_pos
     dst[:, 2] = z
     return dst
+
 
 def makeGrid(shape):
     x = np.linspace(0, shape[0], shape[0], False, dtype=np.uint16)
@@ -54,11 +59,13 @@ def makeGrid(shape):
     dst = np.meshgrid(x, y)
     return dst
 
+
 def addZ(xy_array, z):
     dst = np.zeros((xy_array.shape[0], 3), np.uint16)
     dst[:, 0:2] = xy_array
     dst[:, 2] = z
     return dst
+
 
 def interpolate(data, pos_array, size):
     first_row_idx = np.linspace(0, size[0], num=size[0], endpoint=False, dtype=dataProc.DATA_TYPE)
@@ -69,6 +76,7 @@ def interpolate(data, pos_array, size):
     for k, frame in enumerate(data):
         dst[k, :, :, 0] = scipy.interpolate.griddata(pos_array, frame, grid, method='nearest')
     return dst
+
 
 def binarize(src, **find_peaks_args):
     dst = np.zeros_like(src, src.dtype)

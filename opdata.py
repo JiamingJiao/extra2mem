@@ -62,7 +62,7 @@ class OpVmem(dataProc.Vmem):
     #     self.vmem = signal.filtfilt(b, a, self.vmem, 0)
 
     def temporalFilter(self, kernel_size, sigma):
-        assert kernel_size%2==1, 'kernel size must be a odd number'
+        assert kernel_size%2==1, 'kernel size must be an odd number'
         padding_size = kernel_size//2
         padded = np.pad(self.vmem, ((padding_size, padding_size), (0, 0), (0, 0), (0, 0)), 'edge')
         kernel = np.ones((kernel_size, 1, 1, 1), dtype=np.float32) / kernel_size
