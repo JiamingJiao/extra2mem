@@ -86,7 +86,7 @@ def getBinaryPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size
         np.save(os.path.join(dst_pecg_folder, src_path.split('/')[-1][:-4]), pecg_map)
 
 
-def get3dBlocks(src_path, length, return_data=True, save=False, dst_path=None):
+def get3dBlocks(src_path, length):
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
     array_list = []
     blocks_num = 0
@@ -100,8 +100,17 @@ def get3dBlocks(src_path, length, return_data=True, save=False, dst_path=None):
         for k in range(0, data.shape[0]-length, length):
             dst[block_cnt, :, :, :, :] = data[k:k+length, :, :, :]
             block_cnt += 1
-    if save:
-        for k, block in enumerate(dst):
-            np.save(os.path.join(dst_path, '%06d'%k), block)
-    if return_data:
-        return dst
+    return dst
+
+
+def save3dBlocks(src_path, length, dst_path, norm_range):
+    if not os.path.exists(dst_path):
+        os.makedirs(dst_path)
+    file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
+    blocks_cnt = 0
+    for file_name in file_names:
+        src = np.load(file_name)
+        src = (src-norm_range[0]) / (norm_range[1]-norm_range[0])
+        for k in range(0, src.shape[0]-length, length):
+            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), src[k:k+length])
+            blocks_cnt += 1
