@@ -48,3 +48,4 @@ class GeneratorCnn3d(keras.utils.Sequence):
             self.pecg[block_cnt] = np.load(self.pecg_paths[k])
             self.vmem[block_cnt] = np.load(self.vmem_paths[k])
             block_cnt += 1
+        return (self.pecg, self.vmem)
