@@ -103,7 +103,7 @@ def get3dBlocks(src_path, length):
     return dst
 
 
-def save3dBlocks(src_path, length, dst_path, norm_range):
+def save3dBlocks(src_path, length, dst_path, norm_range, resize=False, dsize=None):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
@@ -111,6 +111,12 @@ def save3dBlocks(src_path, length, dst_path, norm_range):
     for file_name in file_names:
         src = np.load(file_name)
         src = (src-norm_range[0]) / (norm_range[1]-norm_range[0])
-        for k in range(0, src.shape[0]-length, length):
-            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), src[k:k+length])
+        if resize:
+            resized = np.zeros((src.shape[0], dsize[0], dsize[1], src.shape[3]))
+            for k in range(0, src.shape[0]):
+                cv.resize(src[k], dsize, resized[k], 0, 0, cv.INTER_LINEAR)
+        else:
+            resized = src
+        for k in range(0, resized.shape[0]-length, length):
+            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), resized[k:k+length])
             blocks_cnt += 1

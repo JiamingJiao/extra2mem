@@ -63,3 +63,15 @@ def notchFilter(src, sampling_rate, notch_list, sigma_list):
     filtered_f = np.multiply(src_f, filter_notch_f)
     dst = fftpack.ifft(filtered_f, axis=0).real.astype(np.float32)
     return dst
+
+
+def normalize(src):
+    assert src.ndim == 2, 'number of dimensions of input must be 2'
+    dst = np.zeros_like(src)
+    for channel in range(0, src.shape[1]):
+        data = src[:, channel]
+        v_min = np.min(data)
+        v_max = np.max(data)
+        scalar = 2 * np.max([np.abs([v_min, v_max])])
+        dst[:, channel] = 0.5 + data / scalar
+    return dst

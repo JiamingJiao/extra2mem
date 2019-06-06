@@ -390,17 +390,6 @@ def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize
     print('max mem is %.8f'%maxMem)
     return [ecg, mem, dataRange]
 
-'''
-def splitTrainAndVal(src1, src2, valSplit):
-    srcLength = src1.shape[0]
-    valNum = math.floor(valSplit*srcLength + 0.1)
-    randomIndices = random.sample(range(0, srcLength), valNum)
-    val1 = np.take(src1, randomIndices, 0)
-    train1 = np.delete(src1, randomIndices, 0)
-    val2 = np.take(src2, randomIndices, 0)
-    train2 = np.delete(src2, randomIndices, 0)
-    return [train1, val1, train2, val2]
-'''
 
 def copyMassiveData(srcDirList, dstDir, potentialName):
     startNum = 0
