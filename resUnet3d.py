@@ -19,7 +19,7 @@ def getResBlock(x, kernels, kernel_size=3, strides=1):
     return x
 
 
-def getModel(temporal_depth, img_rows, img_cols, channels, depth, kernels, activation):
+def getModel(temporal_depth, img_rows, img_cols, channels, depth, kernels, max_kernel_multiplier=16, activation='sigmoid'):
     inputs = Input((temporal_depth, img_rows, img_cols, channels))  # 64
 
     x = getResBlock(inputs, kernels)
@@ -27,14 +27,22 @@ def getModel(temporal_depth, img_rows, img_cols, channels, depth, kernels, activ
     for k in range(1, depth+1):
         connection.append(x)
         x = MaxPooling3D(2)(x)
-        x = getResBlock(x, kernels * (2**k))
+        if 2**k > max_kernel_multiplier:
+            kernels_multiplier = max_kernel_multiplier
+        else:
+            kernels_multiplier = 2**k
+        x = getResBlock(x, kernels * kernels_multiplier)
 
     for k in range(depth-1, -1, -1):
         x = UpSampling3D(2)(x)
         x = Concatenate(axis=-1)([connection[k], x])
         if k > depth-3:
             x = Dropout(0.5)(x)
-        x = getResBlock(x, kernels * (2**k))
+        if 2**k > max_kernel_multiplier:
+            kernels_multiplier = max_kernel_multiplier
+        else:
+            kernels_multiplier = 2**k
+        x = getResBlock(x, kernels * kernels_multiplier)
     
     out_layer = Conv3D(1, 1, activation=activation, padding='same', kernel_initializer='he_normal')(x)
     model = Model(inputs=inputs, outputs=out_layer, name='resUnet3d')
