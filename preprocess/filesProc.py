@@ -112,9 +112,9 @@ def save3dBlocks(src_path, length, dst_path, norm_range, resize=False, dsize=Non
         src = np.load(file_name)
         src = (src-norm_range[0]) / (norm_range[1]-norm_range[0])
         if resize:
-            resized = np.zeros((src.shape[0], dsize[0], dsize[1], src.shape[3]))
+            resized = np.zeros((src.shape[0], dsize[0], dsize[1], src.shape[3]), np.float32)
             for k in range(0, src.shape[0]):
-                cv.resize(src[k], dsize, resized[k], 0, 0, cv.INTER_LINEAR)
+                cv.resize(src[k], dsize, resized[k], interpolation=cv.INTER_LINEAR)
         else:
             resized = src
         for k in range(0, resized.shape[0]-length, length):
