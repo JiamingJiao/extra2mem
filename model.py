@@ -14,6 +14,7 @@ from keras.layers import TimeDistributed, ConvLSTM2D
 # from keras.layers import MaxPooling3D, Reshape, Permute, ZeroPadding3D, Bidirectional
 from keras.optimizers import Adam
 from keras.layers.advanced_activations import LeakyReLU
+from keras.initializers import Constant
 
 
 class Networks(object):
@@ -323,9 +324,11 @@ class Networks(object):
         inputs = Input((self.temporalDepth, self.imgRows, self.imgCols, self.channels))  # 32x32
 
         encoder1 = Conv3D(self.gKernels, self.gKernelSize, padding='same', kernel_initializer='he_normal')(inputs)
+        # encoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder1)
         encoder1 = LeakyReLU(alpha=0.2)(encoder1)
         encoder1 = Conv3D(self.gKernels, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder1)
-        feature_mapping1 = Conv3D(self.gKernels, 1, strides=2, padding='same', kernel_initializer='ones')(inputs)
+        encoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder1)
+        feature_mapping1 = Conv3D(self.gKernels, 1, strides=2, padding='same', kernel_initializer=Constant(1/int(inputs.shape[-1])))(inputs)
         feature_mapping1.trainable = False
         shortcut1 = Add()([feature_mapping1, encoder1])
         encoder1 = LeakyReLU(alpha=0.2, name='encoder1')(shortcut1)  # 16x16
@@ -335,7 +338,7 @@ class Networks(object):
         encoder2 = LeakyReLU(alpha=0.2)(encoder2)
         encoder2 = Conv3D(self.gKernels*2, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder2)
         encoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder2)
-        feature_mapping2 = Conv3D(self.gKernels*2, 1, strides=2, padding='same', kernel_initializer='ones')(encoder1)
+        feature_mapping2 = Conv3D(self.gKernels*2, 1, strides=2, padding='same', kernel_initializer=Constant(1/int(encoder1.shape[-1])))(encoder1)
         feature_mapping2.trainable = False
         shortcut2 = Add()([feature_mapping2, encoder2])
         encoder2 = LeakyReLU(alpha=0.2, name='encoder2')(shortcut2)  # 8x8
@@ -345,7 +348,7 @@ class Networks(object):
         encoder3 = LeakyReLU(alpha=0.2)(encoder3)
         encoder3 = Conv3D(self.gKernels*4, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder3)
         encoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder3)
-        feature_mapping3 = Conv3D(self.gKernels*4, 1, strides=2, padding='same', kernel_initializer='ones')(encoder2)
+        feature_mapping3 = Conv3D(self.gKernels*4, 1, strides=2, padding='same', kernel_initializer=Constant(1/int(encoder2.shape[-1])))(encoder2)
         feature_mapping3.trainable = False
         shortcut3 = Add()([feature_mapping3, encoder3])
         encoder3 = LeakyReLU(alpha=0.2, name='encoder3')(shortcut3)  # 4x4
@@ -355,21 +358,23 @@ class Networks(object):
         encoder4 = LeakyReLU(alpha=0.2)(encoder4)
         encoder4 = Conv3D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder4)
         encoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder4)
-        feature_mapping4 = Conv3D(self.gKernels*8, 1, strides=2, padding='same', kernel_initializer='ones')(encoder3)
+        feature_mapping4 = Conv3D(self.gKernels*8, 1, strides=2, padding='same', kernel_initializer=Constant(1/int(encoder3.shape[-1])))(encoder3)
         feature_mapping4.trainable = False
         shortcut4 = Add()([feature_mapping4, encoder4])
         encoder4 = LeakyReLU(alpha=0.2, name='encoder4')(shortcut4)  # 2x2
 
         encoder5 = Conv3D(self.gKernels*8, self.gKernelSize, padding='same', kernel_initializer='he_normal')(encoder4)
+        # encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
         encoder5 = LeakyReLU(alpha=0.2)(encoder5)
         encoder5 = Conv3D(self.gKernels*8, self.gKernelSize, strides=2, padding='same', kernel_initializer='he_normal')(encoder5)
-        encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
-        feature_mapping5 = Conv3D(self.gKernels*8, 1, strides=2, padding='same', kernel_initializer='ones')(encoder4)
+        # encoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(encoder5)
+        feature_mapping5 = Conv3D(self.gKernels*8, 1, strides=2, padding='same', kernel_initializer=Constant(1/int(encoder4.shape[-1])))(encoder4)
         feature_mapping5.trainable = False
         shortcut5 = Add()([feature_mapping5, encoder5])
         encoder5 = LeakyReLU(alpha=0.2, name='encoder5')(shortcut5)  # 1x1
 
         decoder1 = Conv3D(self.gKernels*8, 1, activation='relu', padding='valid', kernel_initializer='he_normal')(encoder5)
+        decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
         decoder1 = Conv3D(self.gKernels*8, 1, padding='valid', kernel_initializer='he_normal')(decoder1)
         decoder1 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder1)
         shortcut6 = Add()([encoder5, decoder1])
@@ -379,9 +384,10 @@ class Networks(object):
         connection1 = Concatenate(axis=-1, name='connection1')([decoder1, encoder4])
 
         decoder2 = Conv3D(self.gKernels*8, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection1)
+        decoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder2)
         decoder2 = Conv3D(self.gKernels*8, self.gKernelSize, padding='same', kernel_initializer='he_normal')(decoder2)
         decoder2 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder2)
-        feature_mapping7 = Conv3D(self.gKernels*8, 1, padding='same', kernel_initializer='ones')(connection1)
+        feature_mapping7 = Conv3D(self.gKernels*8, 1, padding='same', kernel_initializer=Constant(1/int(connection1.shape[-1])))(connection1)
         feature_mapping7.trainable = False
         shortcut7 = Add()([feature_mapping7, decoder2])
         decoder2 = Activation('relu')(shortcut7)
@@ -390,9 +396,10 @@ class Networks(object):
         connection2 = Concatenate(axis=-1, name='connection2')([decoder2, encoder3])
 
         decoder3 = Conv3D(self.gKernels*4, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection2)
+        decoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder3)
         decoder3 = Conv3D(self.gKernels*4, self.gKernelSize, padding='same', kernel_initializer='he_normal')(decoder3)
         decoder3 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder3)
-        feature_mapping8 = Conv3D(self.gKernels*4, 1, padding='same', kernel_initializer='ones')(connection2)
+        feature_mapping8 = Conv3D(self.gKernels*4, 1, padding='same', kernel_initializer=Constant(1/int(connection2.shape[-1])))(connection2)
         feature_mapping8.trainable = False
         shortcut8 = Add()([feature_mapping8, decoder3])
         decoder3 = Activation('relu')(shortcut8)
@@ -401,10 +408,10 @@ class Networks(object):
         connection3 = Concatenate(axis=-1, name='connection3')([decoder3, encoder2])
 
         decoder4 = Conv3D(self.gKernels*2, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection3)
+        decoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder4)
         decoder4 = Conv3D(self.gKernels*2, self.gKernelSize, padding='same', kernel_initializer='he_normal')(decoder4)
         decoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder4)
-        decoder4 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder4)
-        feature_mapping9 = Conv3D(self.gKernels*2, 1, padding='same', kernel_initializer='ones')(connection3)
+        feature_mapping9 = Conv3D(self.gKernels*2, 1, padding='same', kernel_initializer=Constant(1/int(connection3.shape[-1])))(connection3)
         feature_mapping9.trainable = False
         shortcut9 = Add()([feature_mapping9, decoder4])
         decoder4 = Activation('relu')(shortcut9)
@@ -413,9 +420,10 @@ class Networks(object):
         connection4 = Concatenate(axis=-1, name='connection4')([decoder4, encoder1])
 
         decoder5 = Conv3D(self.gKernels, self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(connection4)
+        decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder5)
         decoder5 = Conv3D(self.gKernels, self.gKernelSize, padding='same', kernel_initializer='he_normal')(decoder5)
         decoder5 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder5)
-        feature_mapping10 = Conv3D(self.gKernels, 1, padding='same', kernel_initializer='ones')(connection4)
+        feature_mapping10 = Conv3D(self.gKernels, 1, padding='same', kernel_initializer=Constant(1/int(connection4.shape[-1])))(connection4)
         feature_mapping10.trainable = False
         shortcut10 = Add()([feature_mapping10, decoder5])
         decoder5 = Activation('relu')(shortcut10)
@@ -423,6 +431,7 @@ class Networks(object):
         # decoder5 = Dropout(0.5)(decoder5)
 
         decoder6 = Conv3D(int(self.gKernels), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder5)
+        decoder6 = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(decoder6)
         decoder6 = Conv3D(int(self.gKernels/2), self.gKernelSize, activation='relu', padding='same', kernel_initializer='he_normal')(decoder6)
         # shortcut11 = Add()([decoder5, decoder6])
         # decoder6 = relu(shortcut11)
