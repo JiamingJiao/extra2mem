@@ -1,48 +1,60 @@
 from keras.models import Model
-from keras.layers import Input, Conv3D, UpSampling3D, Concatenate, Dropout, BatchNormalization, MaxPooling3D, Add
+from keras.layers import Input, Conv3D, Conv3DTranspose, Concatenate, Dropout, BatchNormalization, MaxPooling3D, Add, Activation
 from keras.layers.advanced_activations import LeakyReLU
 
 
-def getResBlock(x, kernels, kernel_size=3, strides=1):
-    x = Conv3D(kernels, kernel_size, padding='same', kernel_initializer='he_normal')(x)
-    x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
-    x = LeakyReLU(alpha=0.2)(x)
-    shortcut = x
+def activate(x, name):
+    if name == 'relu':
+        x = Activation('relu')(x)
+    elif name == 'leakyRelu':
+        x = LeakyReLU(alpha=0.2)(x)
+    return x
 
+
+def resBlock(x, kernels, activation_name, kernel_size=3, strides=1):
+    shortcut = x
     x = Conv3D(kernels, kernel_size, padding='same', kernel_initializer='he_normal')(x)
     x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
-    x = LeakyReLU(alpha=0.2)(x)
+    x = activate(x, activation_name)
     x = Conv3D(kernels, kernel_size, padding='same', kernel_initializer='he_normal')(x)
     x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
     shortcut = Add()([shortcut, x])
-    x = LeakyReLU(alpha=0.2)(shortcut)
+    x = activate(x, activation_name)
     return x
 
 
 def getModel(temporal_depth, img_rows, img_cols, channels, depth, kernels, max_kernel_multiplier=16, activation='sigmoid'):
     inputs = Input((temporal_depth, img_rows, img_cols, channels))  # 64
-
-    x = getResBlock(inputs, kernels)
+    x = inputs
     connection = []
-    for k in range(1, depth+1):
-        connection.append(x)
-        x = MaxPooling3D(2)(x)
+    for k in range(0, depth+1):
         if 2**k > max_kernel_multiplier:
             kernels_multiplier = max_kernel_multiplier
         else:
             kernels_multiplier = 2**k
-        x = getResBlock(x, kernels * kernels_multiplier)
+        x = Conv3D(kernels * kernels_multiplier, 3, padding='same', kernel_initializer='he_normal')(x)
+        x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
+        x = activate(x, 'leakyRelu')
+        x = resBlock(x, kernels * kernels_multiplier, 'leakyRelu')
+        connection.append(x)
+        if k < depth:
+            x = MaxPooling3D(2)(x)
+        # x = getResBlock(x, kernels * kernels_multiplier, 'leakyRelu')
 
     for k in range(depth-1, -1, -1):
-        x = UpSampling3D(2)(x)
+        # x = UpSampling3D(2)(x)
+        if 2**k > max_kernel_multiplier:
+            kernels_multiplier = max_kernel_multiplier
+        else:
+            kernels_multiplier = 2**k
+        x = Conv3DTranspose(kernels * kernels_multiplier, 3, strides=2, padding='same', kernel_initializer='he_normal')(x)
+        x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
+        x = activate(x, 'relu')
         x = Concatenate(axis=-1)([connection[k], x])
         if k > depth-3:
             x = Dropout(0.5)(x)
-        if 2**k > max_kernel_multiplier:
-            kernels_multiplier = max_kernel_multiplier
-        else:
-            kernels_multiplier = 2**k
-        x = getResBlock(x, kernels * kernels_multiplier)
+        x = Conv3D(kernels * kernels_multiplier, 3, padding='same', kernel_initializer='he_normal')(x)
+        x = resBlock(x, kernels * kernels_multiplier, 'relu')
     
     out_layer = Conv3D(1, 1, activation=activation, padding='same', kernel_initializer='he_normal')(x)
     model = Model(inputs=inputs, outputs=out_layer, name='resUnet3d')
