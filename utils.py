@@ -49,3 +49,28 @@ class GeneratorCnn3d(keras.utils.Sequence):
             self.vmem[block_cnt] = np.load(self.vmem_paths[k])
             block_cnt += 1
         return (self.pecg, self.vmem)
+
+class GeneratorBlocksToImg(keras.utils.Sequence):
+
+    def __init__(self, pecg_paths, vmem_paths, batch_size, block_length, dst_shape):
+        assert batch_size<= block_length, 'batch size > block length, cannot use this block data'
+        self.pecg_paths = pecg_paths
+        self.vmem_paths = vmem_paths
+        self.batch_size = batch_size
+        self.block_length = block_length
+        self.pecg = np.zeros((self.batch_size,)+(dst_shape), np.float32)
+        self.vmem = np.zeros((self.batch_size,)+(dst_shape), np.float32)
+
+    def __len__(self):
+        return len(self.pecg_paths)*int(self.block_length/self.batch_size)
+
+    def __getitem__(self, idx):
+        for k in range(idx*self.batch_size, (idx+1)*self.batch_size):
+            src_file_idx = k//self.block_length
+            src_pecg = np.load(self.pecg_paths[src_file_idx])
+            src_vmem = np.load(self.vmem_paths[src_file_idx])
+            start_idx = k%self.block_length
+            end_idx = start_idx + self.batch_size
+            self.pecg = src_pecg[start_idx:end_idx, ...]
+            self.vmem = src_vmem[start_idx:end_idx, ...]
+        return (self.pecg, self.vmem)
