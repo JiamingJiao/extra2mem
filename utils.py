@@ -50,6 +50,7 @@ class GeneratorCnn3d(keras.utils.Sequence):
             block_cnt += 1
         return (self.pecg, self.vmem)
 
+
 class GeneratorBlocksToImg(keras.utils.Sequence):
 
     def __init__(self, pecg_paths, vmem_paths, batch_size, block_length, dst_shape):

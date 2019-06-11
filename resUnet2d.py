@@ -9,7 +9,7 @@ def resBlock(x, kernels, kernel_size=3, strides=1):
     x = Activation('relu')(x)
     x = Conv2D(kernels, kernel_size, padding='same', kernel_initializer='he_normal')(x)
     x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
-    shortcut = Add()([shortcut, x])
+    x = Add()([shortcut, x])
     x = Activation('relu')(x)
     return x
 
