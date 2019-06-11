@@ -18,7 +18,7 @@ def resBlock(x, kernels, activation_name, kernel_size=3, strides=1):
     x = activate(x, activation_name)
     x = Conv3D(kernels, kernel_size, padding='same', kernel_initializer='he_normal')(x)
     x = BatchNormalization(axis=-1, momentum=0.99, epsilon=0.0001, center=False, scale=False)(x)
-    shortcut = Add()([shortcut, x])
+    x = Add()([shortcut, x])
     x = activate(x, activation_name)
     return x
 
