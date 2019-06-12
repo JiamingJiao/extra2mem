@@ -103,14 +103,20 @@ def get3dBlocks(src_path, length):
     return dst
 
 
-def save3dBlocks(src_path, length, dst_path, normalize=False, norm_range=(0, 0), resize=False, dsize=None):
+def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), resize=False, dsize=None):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
     blocks_cnt = 0
+    if normalize==0:
+        print('normalize == 0, data will not be normalized')
     for file_name in file_names:
         src = np.load(file_name)
-        src = (src-norm_range[0]) / (norm_range[1]-norm_range[0])
+        if normalize==1:
+            src = (src-prior_range[0]) / (prior_range[1]-prior_range[0])
+        elif normalize==2:
+            src, _, _ = dataProc.normalize(src)
+
         if resize:
             resized = np.zeros((src.shape[0], dsize[0], dsize[1], src.shape[3]), np.float32)
             for k in range(0, src.shape[0]):
