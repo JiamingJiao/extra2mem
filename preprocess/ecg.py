@@ -65,7 +65,7 @@ def notchFilter(src, sampling_rate, notch_list, sigma_list):
     return dst
 
 
-def normalize(src):
+def channelNormalize(src):
     assert src.ndim == 2, 'number of dimensions of input must be 2'
     dst = np.zeros_like(src)
     for channel in range(0, src.shape[1]):

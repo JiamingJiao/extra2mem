@@ -103,7 +103,7 @@ def get3dBlocks(src_path, length):
     return dst
 
 
-def save3dBlocks(src_path, length, dst_path, norm_range, resize=False, dsize=None):
+def save3dBlocks(src_path, length, dst_path, normalize=False, norm_range=(0, 0), resize=False, dsize=None):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))

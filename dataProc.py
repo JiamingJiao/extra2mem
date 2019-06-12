@@ -1,18 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # Do NOT import keras, tf or any other modules that require GPU in this file.
 
 import numpy as np
 import cv2 as cv
 import glob
 import os
-import shutil
 import math
 import random
-import sys
 import scipy.interpolate
-import time
 
 DATA_TYPE = np.float32
 CV_DATA_TYPE = cv.CV_32F
@@ -26,6 +20,7 @@ PSEUDO_ECG_CONV_KERNEL[1, :, 0] = 1
 PSEUDO_ECG_CONV_KERNEL[:, 1, 0] = 1
 PSEUDO_ECG_CONV_KERNEL[1, 1, 0] = -4
 ECG_FOLDER_NAME = 'pseudo_ecg'
+
 
 class SparsePecg(object):
     def __init__(self, shape, coordinates, roi=-1, d=0):
@@ -72,6 +67,7 @@ class SparsePecg(object):
                 np.save(dstPath+'%06d'%i, self.dstInRoi)
             print('%s completed'%dstDirList[i])
 
+
 class AccurateSparsePecg(SparsePecg):
     def __init__(self, srcShape, removeNum, fullCoordinatesShape, parentCoordinates, coordinatesDir, **kwargs):
         self.srcShape = srcShape
@@ -101,6 +97,7 @@ class AccurateSparsePecg(SparsePecg):
                 cv.resize(self.dst, self.srcShape, resizedDst, 0, 0, INTERPOLATION_METHOD)
                 np.save(dstPath+'%06d'%i, resizedDst)
             print('%s completed'%dstPath)
+
 
 class Data(object):
     def __init__(self, groups, length, height, width, channels):
@@ -166,6 +163,7 @@ class Data(object):
             for j, img in enumerate(group):
                 cv.imwrite(os.path.join(path, '%06d.png'%j), img)
 
+
 class Phie(Data):
     def __init__(self, coordinates, *args, **kwargs):
         super(Phie, self).__init__(*args, **kwargs)
@@ -174,7 +172,6 @@ class Phie(Data):
         self.coordinates = coordinates
         self.ground = None
         self.rnn = None
-
 
     # def setGround(self, index): # set reference point (ground, phie=0)
     #     self.ground = index
@@ -199,12 +196,14 @@ class Phie(Data):
     def setRnnData(self, temporalDepth):
         validLength = self.length - temporalDepth + 1
         shape = ((self.groups, validLength, temporalDepth) + self.twoD.shape[2:])
-        strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:]) # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
-        self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False) # (groups, validLength, temporalDepth, height, width, channels)
+        strides = (self.twoD.strides[0:2] + (self.twoD.strides[1],) + self.twoD.strides[2:])  # Expand dim_of_length to dim_of_length * dim_of_temporalDepth
+        self.rnn = np.lib.stride_tricks.as_strided(self.twoD, shape=shape, strides=strides, writeable=False)  # (groups, validLength, temporalDepth, height, width, channels)
+
 
 class Pecg(Phie):
     def __init__(self, *args, **kwargs):
         super(Pecg, self).__init__(*args, **kwargs)
+
 
 class Vmem(Data):
     def __init__(self, *args, **kwargs):
@@ -212,7 +211,8 @@ class Vmem(Data):
         self.rnn = None
 
     def setRnnData(self, temporalDepth):
-        self.rnn = self.twoD[:, temporalDepth-1:, :, :, :] # (groups, validLength, height, width, channels)
+        self.rnn = self.twoD[:, temporalDepth-1:, :, :, :]  # (groups, validLength, height, width, channels)
+
 
 def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
     i = 0
@@ -236,6 +236,7 @@ def selectData(length, size, nameList, srcPathPrefix, dstPathPrefix):
                         np.save(os.path.join(dstVmemPath, '%06d.npy'%(length-k)), srcVmem[j-k, x0:x, y0:y])
                     i += 1
 
+
 def selectData2(size, nameList, srcPathPrefix, dstPathPrefix):
     i = 0
     dstPhiePath = os.path.join(dstPathPrefix, '%d_%d'%size, 'phie')
@@ -252,6 +253,7 @@ def selectData2(size, nameList, srcPathPrefix, dstPathPrefix):
                 np.save(os.path.join(dstPhiePath, ''.join(['%06d_'%i, name])), srcPhie[:, x-size[0]:x, y-size[1]:y])
                 np.save(os.path.join(dstVmemPath, ''.join(['%06d_'%i, name])), srcVmem[:, x-size[0]:x, y-size[1]:y])
                 i += 1
+
 
 def selectData3(length, srcPathPrefix, dstPathPrefix):
     dstPhiePath = os.path.join(dstPathPrefix, 'phie')
@@ -271,12 +273,14 @@ def selectData3(length, srcPathPrefix, dstPathPrefix):
             np.save(os.path.join(dstVmemPath, '%06d'%i), srcVmem[k-length:k])
             i += 1
 
+
 def shuffleData(ecg, vmem):
     # shuffle on the dim of groups
     state = np.random.get_state()
     np.random.shuffle(ecg)
     np.random.set_state(state)
     np.random.shuffle(vmem)
+
 
 def createDirList(dataDir, nameList, potentialName=''):
     length = len(nameList)
@@ -285,29 +289,34 @@ def createDirList(dataDir, nameList, potentialName=''):
         dst[i] = dataDir + nameList[i] + '/' + potentialName
     return dst
 
+
 def randomCoordinates(pointsNum, limit):
     sampledPoints = random.sample(range(0, limit[0]*limit[1]), pointsNum)
     dst = np.ndarray((pointsNum, 2), dtype=np.uint16)
-    dst[:,0], dst[:,1] = np.divmod(sampledPoints, limit[1])
+    dst[:, 0], dst[:, 1] = np.divmod(sampledPoints, limit[1])
     return dst
+
 
 def uniformCoordinates(shape, limit):
     firstRowIndex = np.linspace(0, limit[0]-1, num=shape[0], dtype=DATA_TYPE)
     firstColIndex = np.linspace(0, limit[1]-1, num=shape[1], dtype=DATA_TYPE)
     colIndex, rowIndex = np.meshgrid(firstRowIndex, firstColIndex)
     dst = np.ndarray((shape[0]*shape[1], 2), dtype=np.uint16)
-    dst[:,0] = rowIndex.flatten()
-    dst[:,1] = colIndex.flatten()
+    dst[:, 0] = rowIndex.flatten()
+    dst[:, 1] = colIndex.flatten()
     return dst
+
 
 def removePoints(src, num=0):
     deletedPoints = random.sample(range(0, src.shape[0]), num)
     dst = np.delete(src, deletedPoints, 0)
     return dst
 
+
 def clipData(src, bounds=(0, 1)):
     dst = np.clip(src, bounds[0], bounds[1])
     return dst
+
 
 def npyToPng(srcDir, dstDir):
     if not os.path.exists(dstDir):
@@ -318,34 +327,36 @@ def npyToPng(srcDir, dstDir):
         cv.imwrite(dstDir + "%06d"%i+".png", src[i, :, :])
     print('convert .npy to .png completed')
 
-def loadData(srcDir, resize=False, dstSize=(256, 256), withChannel=True): # doesn't work with multi-channel image
+
+def loadData(srcDir, resize=False, dstSize=(256, 256), withChannel=True):  # doesn't work with multi-channel image
     srcPathList = sorted(glob.glob(srcDir + '*.npy'))
     if len(srcPathList)==0:
         srcPathList = sorted(glob.glob(srcDir + '/*.npy'))
     length = len(srcPathList)
     sample = np.load(srcPathList[0])
     src = np.ndarray(sample.shape, dtype=DATA_TYPE)
-    if resize == False:
+    if not resize:
         dstSize = (sample.shape[0], sample.shape[1])
     if sample.ndim == 2:
         dst = np.ndarray((length,)+dstSize, dtype=DATA_TYPE)
     elif sample.ndim == 3:
-        if resize == True:
+        if resize:
             dst = np.ndarray(((length,)+dstSize), dtype=DATA_TYPE)
         else:
             dst = np.ndarray(((length,)+sample.shape), dtype=DATA_TYPE)
     for i in range(0, length):
         src = np.load(srcPathList[i])
         src = src.astype(DATA_TYPE)
-        if resize == True:
+        if resize:
             cv.resize(src, dstSize, dst[i], 0, 0, INTERPOLATION_METHOD)
         else:
             dst[i] = src
-    if withChannel==True:
+    if withChannel:
         dst = dst.reshape((length,)+dstSize+(1,))
     else:
         dst = dst.reshape((length,)+dstSize)
     return dst
+
 
 def create3dSequence(srcEcg, srcMem, temporalDepth, netGName):
     dstEcg = create3dEcg(srcEcg, temporalDepth, netGName)
@@ -356,6 +367,7 @@ def create3dSequence(srcEcg, srcMem, temporalDepth, netGName):
     dstMem = srcMem[startFrame:dstEcg.shape[0]+startFrame]
     return dstEcg, dstMem
 
+
 def create3dEcg(src, temporalDepth, netGName):
     if netGName == 'convLstm':
         framesNum = src.shape[0]-temporalDepth
@@ -365,6 +377,7 @@ def create3dEcg(src, temporalDepth, netGName):
     for i in range(0, framesNum):
         dst[i] = src[i:i+temporalDepth]
     return dst
+
 
 def mergeSequence(pecgDirList, memDirList, temporalDepth, netGName=None, srcSize=(200, 200), dstSize=(256, 256), normalizationRange=NORM_RANGE):
     length = len(pecgDirList)
@@ -400,6 +413,7 @@ def copyMassiveData(srcDirList, dstDir, potentialName):
             np.save(dstDir + '%06d'%startNum, dst)
             startNum += 1
 
+
 def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
     fileName = sorted(glob.glob(srcPath + '*.npy'))
     del fileName[endNum+1:len(fileName)]
@@ -409,7 +423,8 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
         dstFileName = dstPath + '%06d'%(startNum+shiftNum)
         np.save(dstFileName, dst)
         startNum += 1
-    
+
+
 def normalize(src, normalizationRange=NORM_RANGE):
     minValue = np.amin(src)
     maxValue = np.amax(src)
@@ -419,9 +434,11 @@ def normalize(src, normalizationRange=NORM_RANGE):
     np.multiply(dst, factor, dst)
     return [dst, minValue, maxValue]
 
+
 def scale(src, priorRange=None, dstRange=(0, 1)):
     dst = dstRange[0] + ((src-priorRange[0])*(dstRange[1]-dstRange[0])) / (priorRange[1]-priorRange[0])
     return dst
+
 
 def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
     # color
@@ -441,6 +458,7 @@ def makeVideo(srcDir, dstPath, frameRange=(-1, -1), padding=(0, 0), fps=VIDEO_FP
     for i in range(0, padding[1]):
         writer.write(paddingArray)
     writer.release
+
 
 def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
     src = np.copy(src)
@@ -462,7 +480,7 @@ def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
                     cv.cvtColor(frame, cv.COLOR_RGBA2BGR, bgr[i])
         bgr *= 255
         bgr = bgr.astype(np.uint8)
-    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=True) # shitty
+    writer = cv.VideoWriter(filename=dstPath, fourcc=cv.VideoWriter_fourcc(*VIDEO_ENCODER), fps=fps, frameSize=frameSize, isColor=True)
     resized = np.zeros((frameSize + (3,)), np.uint8)
     paddingArray = np.zeros_like(resized)
     for i in range(0, padding[0]):
@@ -473,3 +491,26 @@ def makeVideo2(src, dstPath, padding=(0, 0), fps=VIDEO_FPS, frameSize=IMG_SIZE):
     for i in range(0, padding[1]):
         writer.write(paddingArray)
     writer.release
+
+
+def sequenceToBlocks(src, block_length, telomere_length=0):
+    blocks_list = []
+    for k in range(0, src.shape[0]-block_length+1, block_length-telomere_length*2):
+        blocks_list.append(src[np.newaxis, k:k+block_length])
+    dst = np.concatenate(blocks_list)
+    return dst
+
+
+def blocksToSequence(src, telomere_length=0):
+    valid_block_length = src.shape[1] - telomere_length*2
+    valid = src[:, telomere_length:telomere_length+valid_block_length, ...]
+    dst = valid.reshape((src.shape[0]*valid_block_length,)+src.shape[2:5])
+    return dst
+
+
+def resizeSequence(src, dst_size, inter_method=INTERPOLATION_METHOD, dst=None):
+    if dst is None:
+        dst = np.zeros((src.shape[0], dst_size[0], dst_size[1], src.shape[-1]), src.dtype)
+    for src_frame, dst_frame in zip(src, dst):
+        cv.resize(src_frame, dst_size, dst_frame, interpolation=inter_method)
+    return dst
