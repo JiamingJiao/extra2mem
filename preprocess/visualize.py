@@ -7,9 +7,12 @@ import numpy as np
 def plot(data, fig_size=(15, 20)):
     channels_num = data.shape[1]
     fig = plt.figure(figsize=fig_size)
+    label_position = (1.05*data.shape[0], 0)
     for i in range(channels_num):
         plt.subplot(channels_num, 1, i+1)
         plt.plot(data[:, i])
+        plt.text(*label_position, '%d'%(i+1))
+    plt.close()
     return fig
 
 

@@ -17,8 +17,11 @@ def getEcgMaps(src_path, start, end, elec_pos, size, **read_scv_kwargs):
 
 
 def filterEcg(src, sampling_rate, fc_low, order_low, fc_notch_list, sigma_list):
-    filter_low = makeLowpassFilter(sampling_rate, src.shape[0], fc_low, order_low)
-    filtered_low = signal.filtfilt(*filter_low, src, axis=0)
+    if fc_low==-1 or order_low==-1:
+        filtered_low = src
+    else:
+        filter_low = makeLowpassFilter(sampling_rate, src.shape[0], fc_low, order_low)
+        filtered_low = signal.filtfilt(*filter_low, src, axis=0)
 
     notch_pos_list = [int(fc_notch*src.shape[0]/sampling_rate) for fc_notch in fc_notch_list]
     filter_notch = makeNotchFilter(notch_pos_list, sigma_list, src.shape[0])
@@ -34,7 +37,7 @@ def load(path, start, end, **read_csv_kwargs):
     trigger = np.array(csv_data.iloc[0:-1, 2])
     triggered_idx = np.argmax(trigger<-5)
     dst = -np.array(csv_data.iloc[triggered_idx+start:triggered_idx+end, 3:-1])
-    return dst
+    return dst  # (time, channel)
 
 
 def makeLowpassFilter(sampling_rate, length, f_cut, order):
