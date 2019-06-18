@@ -112,10 +112,6 @@ def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), re
         print('normalize == 0, data will not be normalized')
     for file_name in file_names:
         src = np.load(file_name)
-        if normalize==1:
-            src = (src-prior_range[0]) / (prior_range[1]-prior_range[0])
-        elif normalize==2:
-            src, _, _ = dataProc.normalize(src)
 
         if resize:
             resized = np.zeros((src.shape[0], dsize[0], dsize[1], src.shape[3]), np.float32)
@@ -123,6 +119,17 @@ def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), re
                 cv.resize(src[k], dsize, resized[k], interpolation=cv.INTER_LINEAR)
         else:
             resized = src
-        for k in range(0, resized.shape[0]-length, length):
-            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), resized[k:k+length])
+        
+        if normalize==1:
+            normalized = (resized-prior_range[0]) / (prior_range[1]-prior_range[0])
+        elif normalize==2:
+            normalized, _, _ = dataProc.normalize(src)
+        elif normalize==3:
+            normalized = np.zeros_like(resized)
+            min_arr = np.amin(resized, 0)
+            max_arr = np.amax(resized, 0)
+            normalized = (resized-min_arr) / (max_arr-min_arr)
+
+        for k in range(0, normalized.shape[0]-length, length):
+            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), normalized[k:k+length])
             blocks_cnt += 1
