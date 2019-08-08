@@ -16,17 +16,21 @@ def getEcgMaps(src_path, start, end, elec_pos, size, **read_scv_kwargs):
     return dst
 
 
-def filterEcg(src, sampling_rate, fc_low, order_low, fc_notch_list, sigma_list):
-    if fc_low==-1 or order_low==-1:
-        filtered_low = src
-    else:
-        filter_low = makeLowpassFilter(sampling_rate, src.shape[0], fc_low, order_low)
-        filtered_low = signal.filtfilt(*filter_low, src, axis=0)
+def filterEcg(src, sampling_rate, fc_low, order_low, fc_high, order_high, fc_notch_list, sigma_list):
+    # if fc_low==-1 or order_low==-1:
+    #     filtered_low = src
+    # else:
+    #     filter_low = makeLowpassFilter(sampling_rate, src.shape[0], fc_low, order_low)
+    #     filtered_low = signal.filtfilt(*filter_low, src, axis=0)
 
+    filter_low = makeLowpassFilter(sampling_rate, src.shape[0], fc_low, order_low)
+    filtered_low = signal.filtfilt(*filter_low, src, axis=0)
+    filter_high = makeHighpassFilter(sampling_rate, src.shape[0], fc_high, order_high)
+    filtered_high = signal.filtfilt(*filter_high, filtered_low, axis=0)
     notch_pos_list = [int(fc_notch*src.shape[0]/sampling_rate) for fc_notch in fc_notch_list]
     filter_notch = makeNotchFilter(notch_pos_list, sigma_list, src.shape[0])
-    filtered_low_f = fftpack.fft(filtered_low, axis=0)
-    filtered_f = np.multiply(filtered_low_f, filter_notch)
+    filtered_high_f = fftpack.fft(filtered_high, axis=0)
+    filtered_f = np.multiply(filtered_high_f, filter_notch)
     dst = fftpack.ifft(filtered_f, axis=0).real.astype(np.float32)
     return dst
 
@@ -43,6 +47,12 @@ def load(path, start, end, **read_csv_kwargs):
 def makeLowpassFilter(sampling_rate, length, f_cut, order):
     w = f_cut / (sampling_rate/2)
     b, a = signal.butter(order, w, 'lowpass')
+    return b, a
+
+
+def makeHighpassFilter(sampling_rate, length, f_cut, order):
+    w = f_cut / (sampling_rate/2)
+    b, a = signal.butter(order, w, 'highpass')
     return b, a
 
 

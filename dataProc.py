@@ -426,13 +426,23 @@ def copyData(srcPath, dstPath, startNum=0, endNum=None, shiftNum=0):
 
 
 def normalize(src, normalizationRange=NORM_RANGE):
-    minValue = np.amin(src)
-    maxValue = np.amax(src)
+    minValue = src.min()
+    maxValue = src.max()
     dst = np.empty_like(src)
     np.add(src, -minValue, dst)
     factor = (normalizationRange[1]-normalizationRange[0]) / (maxValue-minValue)
     np.multiply(dst, factor, dst)
     return [dst, minValue, maxValue]
+
+
+def channelNormalize(src):
+    min_arr = np.amin(src, 0)
+    max_arr = np.amax(src, 0)
+    range_arr_ = max_arr - min_arr
+    eps = np.finfo(np.float32).eps
+    range_arr = np.where(range_arr_<eps, 1, range_arr_)
+    dst = (src - min_arr) / range_arr
+    return dst
 
 
 def scale(src, priorRange=None, dstRange=(0, 1)):

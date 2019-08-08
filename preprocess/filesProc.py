@@ -71,6 +71,28 @@ def getPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size):
         np.save(os.path.join(dst_pecg_folder, src_path.split('/')[-1][:-4]), pecg_map)
 
 
+def getPecgWithRandomElec(src_path, dst_path, elec_pos_xy, z_dist_list, elec_pos_num, gnd_pos, conductance, inter_size):
+    # elec_pos_num: how many different electrode settings are used on each phie dsequence
+    src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
+    dst_pecg_folder = os.path.join(dst_path, 'pecg')
+    elec_num = elec_pos_xy.shape[0]
+    elec_pos_xyz = np.zeros((elec_num, 3), elec_pos_xy.dtype)
+    elec_pos_xyz[:, 0:2] = elec_pos_xy
+    max_dist_idx = len(z_dist_list)-1
+    if not os.path.exists(dst_pecg_folder):
+        os.makedirs(dst_pecg_folder)
+    for src_path in src_path_list:
+        phie = np.load(src_path)
+        pecg_ref = pseudoEcg.calcPecgSequence(phie, gnd_pos, conductance)
+        for i in range(0, elec_pos_num):
+            for j in range(0, elec_num):
+                elec_pos_xyz[j, 2] = z_dist_list[np.random.randint(0, max_dist_idx)]
+            pecg_no_ref = pseudoEcg.calcPecgSequence(phie, elec_pos_xyz, conductance)
+            pecg = np.subtract(pecg_no_ref, pecg_ref)
+            pecg_map = pseudoEcg.interpolate(pecg, elec_pos_xy, inter_size)
+            np.save(os.path.join(dst_pecg_folder, ''.join([src_path.split('/')[-1][:-4], '%02d'%i])), pecg_map)
+
+
 def getBinaryPecg(src_path, dst_path, elec_pos, gnd_pos, conductance, inter_size, **find_peaks_args):
     src_path_list = sorted(glob.glob(os.path.join(src_path, '*.npy')))
     dst_pecg_folder = os.path.join(dst_path, 'pecg_bin')
@@ -103,7 +125,7 @@ def get3dBlocks(src_path, length):
     return dst
 
 
-def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), resize=False, dsize=None):
+def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), resize=False, dsize=None, repetition=1):
     if not os.path.exists(dst_path):
         os.makedirs(dst_path)
     file_names = sorted(glob.glob(os.path.join(src_path, '*.npy')))
@@ -123,13 +145,14 @@ def save3dBlocks(src_path, length, dst_path, normalize=0, prior_range=(0, 0), re
         if normalize==1:
             normalized = (resized-prior_range[0]) / (prior_range[1]-prior_range[0])
         elif normalize==2:
-            normalized, _, _ = dataProc.normalize(src)
+            normalized, _, _ = dataProc.normalize(resized)
         elif normalize==3:
             normalized = np.zeros_like(resized)
             min_arr = np.amin(resized, 0)
             max_arr = np.amax(resized, 0)
             normalized = (resized-min_arr) / (max_arr-min_arr)
 
-        for k in range(0, normalized.shape[0]-length, length):
-            np.save(os.path.join(dst_path, '%06d'%blocks_cnt), normalized[k:k+length])
-            blocks_cnt += 1
+        for _ in range(0, repetition):
+            for k in range(0, normalized.shape[0]-length, length):
+                np.save(os.path.join(dst_path, '%06d'%blocks_cnt), normalized[k:k+length])
+                blocks_cnt += 1
